@@ -1,12 +1,10 @@
 # cell-priors
 
-Efficient, diverse **priors** for virtual-cell foundation-model pretraining — with a
+Efficient and diverse **priors** for virtual-cell foundation-model pretraining — with a
 uniform interface so priors can be benchmarked and compared against each other and
 against real data.
 
 A prior factorizes into two swappable pieces:
-
-> **prior = GRN sampler × simulator**
 
 - a **GRN sampler** draws a *network structure* (which genes regulate which);
 - a **simulator** turns that structure into single-cell expression and defines how
@@ -64,6 +62,15 @@ def step(model, key):
     expr = prior.observational(params, key)   # simulated on-device
     return loss_fn(model, expr)               # model trains on it, same graph
 ```
+
+No `stop_gradient` is needed here: you differentiate w.r.t. `model`, and `expr`
+depends only on `(params, key)`, so there is no differentiable path from `model` into
+the prior — it acts as a constant data source. The simulators are nonetheless fully
+differentiable on purpose (pure JAX), which enables gradient-based GRN inference and
+differentiable-simulation experiments, so the library does **not** force a
+`stop_gradient` by default. If you ever differentiate a pytree that *includes* the prior
+params (e.g. meta-learning the prior) and want to block gradients into it, wrap the
+output explicitly: `expr = jax.lax.stop_gradient(prior.observational(params, key))`.
 
 ---
 
@@ -264,7 +271,7 @@ builds on:
 ```bibtex
 @software{sextro_cell_priors_2026,
   author  = {Sextro, Marvin},
-  title   = {{cell-priors}: Efficient, diverse priors for virtual cell foundation model pretraining},
+  title   = {{cell-priors}: Efficient and diverse priors for virtual cell foundation model pretraining},
   year    = {2026},
   url     = {https://github.com/marvinsxtr/cell-priors}
 }

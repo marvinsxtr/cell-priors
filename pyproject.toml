@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cell-priors"
 version = "0.0.1"
-description = "Benchmarking and developing efficient, diverse priors for virtual cell foundation model pretraining."
+description = "Benchmarking and developing efficient and diverse priors for virtual cell foundation model pretraining."
 requires-python = "==3.12.*"
 license = "MIT"
 license-files = ["LICENSE"]

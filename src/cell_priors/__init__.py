@@ -1,4 +1,4 @@
-"""cell-priors: efficient, diverse priors for virtual cell foundation models.
+"""cell-priors: efficient and diverse priors for virtual cell foundation models.
 
 A prior is a (GRN sampler x simulator) pair. Build one with :class:`ComposedPrior`.
 """
