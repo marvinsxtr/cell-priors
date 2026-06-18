@@ -50,13 +50,14 @@ environments = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 119
 indent-width = 4
 src = ["src"]
+extend-exclude = ["tests/reference"]  # third-party code copied verbatim for validation
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B", "NPY"]

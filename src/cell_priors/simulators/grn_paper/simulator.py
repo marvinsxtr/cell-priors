@@ -15,23 +15,23 @@ from .noise import maybe_add_noise
 def build_grn_paper_params(grn: GRN, key: Array, inflate_edges: bool = True, dtype=jnp.float32) -> GrnPaperParams:
     """Attach grn-paper expression parameters to a :class:`GRN` (pure JAX).
 
-    Mirrors ``add_expression_parameters``: the dense interaction matrix is
-    ``beta = S * E`` with ``S ~ Normal(0, 1)`` (inflated by its sign so |weight| is
-    pushed away from 0) and ``E`` the integer edge-multiplicity matrix; ``alpha`` is
+    Mirrors ``add_expression_parameters`` directly on the sparse edge list: each
+    edge weight is ``S * E`` with ``S ~ Normal(0, 1)`` (inflated by its sign so
+    |weight| is pushed away from 0) and ``E`` the edge multiplicity; ``alpha`` is
     ``logit(Beta(2, 8))`` and ``l = max(sigmoid(-alpha), Beta(8, 2))``.
     """
     g = grn.num_genes
+    e = grn.num_edges
     k_s, k_a, k_l = jax.random.split(key, 3)
 
-    e_mat = jnp.zeros((g, g), dtype=dtype).at[grn.reg_idx, grn.tar_idx].add(grn.weight.astype(dtype))
-    s = jax.random.normal(k_s, (g, g), dtype=dtype)
+    s = jax.random.normal(k_s, (e,), dtype=dtype)
     if inflate_edges:
         s = s + jnp.sign(s)
-    beta = s * e_mat
+    beta = s * grn.weight.astype(dtype)
 
     alpha = jax.scipy.special.logit(jax.random.beta(k_a, 2.0, 8.0, (g,)).astype(dtype))
     l = jnp.maximum(jax.nn.sigmoid(-alpha), jax.random.beta(k_l, 8.0, 2.0, (g,)).astype(dtype))
-    return GrnPaperParams(beta=beta, alpha=alpha, l=l, group=grn.group)
+    return GrnPaperParams(reg_idx=grn.reg_idx, tar_idx=grn.tar_idx, beta=beta, alpha=alpha, l=l, group=grn.group)
 
 
 class GrnPaperSimulator(Simulator):

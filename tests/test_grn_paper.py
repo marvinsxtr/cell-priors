@@ -1,50 +1,19 @@
-"""Tests for the grn-paper sigmoid-SDE simulator, incl. parity with the reference."""
+"""Tests for the grn-paper sigmoid-SDE simulator.
+
+Numerical parity against the original numpy code lives in
+``test_grn_paper_reference.py``.
+"""
 
 from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from scipy.special import expit
 
 from cell_priors.base import ComposedPrior, InterventionKind
 from cell_priors.samplers import GroupedScaleFreeSampler
 from cell_priors.simulators.grn_paper import GrnPaperConfig, GrnPaperSimulator
-from cell_priors.simulators.grn_paper.core import GrnPaperParams, knockout, simulate
-
-
-def _reference_mean(beta, alpha, l, n_steps, burnin, dt):
-    """Direct transcription of grn.simulate_rna with s=0 (deterministic)."""
-    g = len(alpha)
-    x = np.zeros(g)
-    acc = np.zeros(g)
-    for i in range(n_steps - 1):
-        x = np.maximum(0.0, x + dt * (expit(alpha + x @ beta) - l * x))
-        if i + 1 >= burnin:
-            acc += x
-    return acc / (n_steps - burnin)
-
-
-def test_parity_with_reference_deterministic():
-    rng = np.random.default_rng(0)
-    g = 8
-    beta = rng.normal(0, 1, (g, g))
-    np.fill_diagonal(beta, 0)
-    alpha = rng.normal(-1, 0.5, g)
-    l = rng.uniform(0.3, 0.9, g)
-
-    n_steps, burnin, dt = 1200, 600, 1e-2
-    ref = _reference_mean(beta, alpha, l, n_steps, burnin, dt)
-
-    p = GrnPaperParams(
-        beta=jnp.asarray(beta, jnp.float32),
-        alpha=jnp.asarray(alpha, jnp.float32),
-        l=jnp.asarray(l, jnp.float32),
-        group=jnp.zeros(g, jnp.int32),
-    )
-    cfg = GrnPaperConfig(num_cells=1, n_steps=n_steps, burnin=burnin, dt=dt, s=0.0)
-    mine = np.asarray(simulate(p, jax.random.PRNGKey(0), cfg))[0]
-    assert np.max(np.abs(mine - ref)) < 1e-3
+from cell_priors.simulators.grn_paper.core import knockout
 
 
 def test_simulate_shape_and_health():
@@ -61,9 +30,11 @@ def test_knockout_zeros_outgoing_edges():
     sampler = GroupedScaleFreeSampler(r=3.0, num_groups=1)
     sim = GrnPaperSimulator(GrnPaperConfig(num_cells=4, n_steps=200, burnin=100))
     p = ComposedPrior(sampler, sim).sample_params(jax.random.PRNGKey(0), num_genes=20)
-    g = int(np.asarray(jnp.abs(p.beta).sum(axis=1)).argmax())  # a hub regulator
+    reg = np.asarray(p.reg_idx)
+    g = int(np.bincount(reg, minlength=p.num_genes).argmax())  # a hub regulator
     ko = knockout(p, jnp.array([g]))
-    assert float(jnp.abs(ko.beta[g]).sum()) == 0.0
+    out_edges = np.asarray(ko.reg_idx) == g
+    assert float(jnp.abs(jnp.asarray(ko.beta)[out_edges]).sum()) == 0.0
 
 
 def test_jittable_and_intervenable():
