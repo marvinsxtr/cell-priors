@@ -15,6 +15,15 @@ Everything is a pytree of JAX arrays and every sampling/simulation method is a p
 function of `(params, key)`, so a prior + model can train together *inside a single JAX
 graph* on the GPU with no host round-trip.
 
+![SERGIO prior throughput across backends](assets/throughput.png)
+
+Generating fresh SERGIO networks on the GPU (batched, fused into the training graph)
+reaches **~2,000–3,400 networks/s** — roughly **20–60× faster than the same JAX core on
+CPU**, **50–300× the Rust `sergio_rs` reference**, and faster than even *loading*
+precomputed data from disk through a PyTorch `DataLoader`. Same model, four backends;
+measured on a Lenovo ThinkStation (NVIDIA GB10). Reproduce with
+`python -m cell_priors.eval.throughput` (see [Benchmarks](#benchmarks--comparison-scripts-not-notebooks)).
+
 Currently included:
 
 | samplers / simulators | implements | reimplemented in JAX from |
@@ -206,6 +215,18 @@ uv run python -m cell_priors.eval.benchmark_e2e --simulator grn_paper --genes 50
 Each step samples a fresh batch of networks from the prior, simulates them, feeds the
 expression into a small permutation-invariant JAX model, and backprops the model — all
 inside a single `jit`, no host transfer.
+
+**Throughput across backends (the figure at the top):**
+
+```bash
+# CPU variants (sergio_rs + JAX-CPU + h5/PyTorch loader), then GPU, then plot
+JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES= uv run python -m cell_priors.eval.throughput measure --out throughput.json --extras
+XLA_PYTHON_CLIENT_PREALLOCATE=false uv run python -m cell_priors.eval.throughput measure --out throughput.json
+uv run python -m cell_priors.eval.throughput plot --data throughput.json --out assets/throughput.png --device "my machine"
+```
+
+`XLA_PYTHON_CLIENT_PREALLOCATE=false` keeps JAX from grabbing most of GPU memory up front
+(important on the GB10's unified memory, and when sharing the GPU).
 
 **Compare distributions, DE genes, and real data:**
 
