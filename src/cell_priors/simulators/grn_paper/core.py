@@ -92,10 +92,12 @@ class GrnPaperConfig:
 def _regulatory_input(params: GrnPaperParams, x: Array) -> Array:
     """Compute ``X @ beta`` sparsely: shape ``(cells, G)``.
 
-    For each edge ``i -> j`` accumulates ``beta_ij * x_i`` into target ``j``.
+    For each edge ``i -> j`` accumulates ``beta_ij * x_i`` into target ``j`` with a
+    single batched scatter-add (faster than a transpose + ``segment_sum``).
     """
     contrib = params.beta[None, :] * x[:, params.reg_idx]  # (cells, E)
-    return jax.ops.segment_sum(contrib.T, params.tar_idx, num_segments=params.num_genes).T
+    out = jnp.zeros_like(x)
+    return out.at[:, params.tar_idx].add(contrib)
 
 
 def _step(params: GrnPaperParams, x: Array, key: Array, dt: float, s: float) -> Array:
@@ -107,18 +109,26 @@ def _step(params: GrnPaperParams, x: Array, key: Array, dt: float, s: float) -> 
 
 
 def simulate(params: GrnPaperParams, key: Array, cfg: GrnPaperConfig) -> Array:
-    """Integrate the SDE and return time-averaged expression, shape ``(cells, G)``."""
+    """Integrate the SDE and return time-averaged expression, shape ``(cells, G)``.
+
+    Two ``lax.scan`` phases: a burn-in that only advances the state, then a
+    sampling phase that accumulates the running mean (avoids a per-step
+    branch/accumulator during burn-in).
+    """
     g = params.num_genes
-    x0 = jnp.zeros((cfg.num_cells, g), dtype=params.alpha.dtype)
+    k_burn, k_sample = random.split(key)
 
-    def body(carry, key_t):
-        x, acc, i = carry
+    def advance(x, key_t):
+        return _step(params, x, key_t, cfg.dt, cfg.s), None
+
+    def accumulate(carry, key_t):
+        x, acc = carry
         x = _step(params, x, key_t, cfg.dt, cfg.s)
-        acc = acc + jnp.where(i >= cfg.burnin, x, 0.0)  # accumulate only post-burn-in
-        return (x, acc, i + 1), None
+        return (x, acc + x), None
 
-    keys = random.split(key, cfg.n_steps)
-    (_, acc, _), _ = lax.scan(body, (x0, jnp.zeros_like(x0), 0), keys)
+    x0 = jnp.zeros((cfg.num_cells, g), dtype=params.alpha.dtype)
+    x_burned, _ = lax.scan(advance, x0, random.split(k_burn, cfg.burnin))
+    (_, acc), _ = lax.scan(accumulate, (x_burned, jnp.zeros_like(x0)), random.split(k_sample, cfg.sample_steps))
     return acc / cfg.sample_steps
 
 
