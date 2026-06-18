@@ -63,15 +63,6 @@ def step(model, key):
     return loss_fn(model, expr)               # model trains on it, same graph
 ```
 
-No `stop_gradient` is needed here: you differentiate w.r.t. `model`, and `expr`
-depends only on `(params, key)`, so there is no differentiable path from `model` into
-the prior — it acts as a constant data source. The simulators are nonetheless fully
-differentiable on purpose (pure JAX), which enables gradient-based GRN inference and
-differentiable-simulation experiments, so the library does **not** force a
-`stop_gradient` by default. If you ever differentiate a pytree that *includes* the prior
-params (e.g. meta-learning the prior) and want to block gradients into it, wrap the
-output explicitly: `expr = jax.lax.stop_gradient(prior.observational(params, key))`.
-
 ---
 
 ## The interfaces
