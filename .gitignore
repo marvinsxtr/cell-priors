@@ -6,7 +6,9 @@ __pycache__/
 .ruff_cache/
 *.h5ad
 *.png
+!assets/*.png
 outputs/
 data/
 .ipynb_checkpoints/
 plan.md
+scratch_*.py
