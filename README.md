@@ -17,11 +17,18 @@ graph* on the GPU with no host round-trip.
 
 Currently included:
 
-| | implements | reimplemented in JAX from |
+| samplers / simulators | implements | reimplemented in JAX from |
 |---|---|---|
 | **`GroupedScaleFreeSampler`** | grouped scale-free directed graph | grn-paper (Aguirre et al. 2025) |
 | **`SergioSimulator`** | Hill-function SDE, multi-cell-type, technical noise | [SERGIO]; validated vs. [`sergio_rs`] |
 | **`GrnPaperSimulator`** | sigmoid-link SDE, time-averaged observation | grn-paper (Aguirre et al. 2025) |
+
+Plus a preconfigured prior:
+
+- **`MapPfnPrior`** — grouped scale-free sampler × a *cycle-tolerant* SERGIO. Less
+  opinionated than the strict SERGIO prior: it simulates any sampled GRN exactly as drawn
+  (cycles kept) and gives every gene a basal production rate, so it does **not** require a
+  DAG or master regulators.
 
 [SERGIO]: https://github.com/PayamDibaeinia/SERGIO
 [`sergio_rs`]: https://github.com/rainx0r/sergio_rs
@@ -33,16 +40,17 @@ Currently included:
 
 ```python
 import jax
-from cell_priors import ComposedPrior, InterventionKind
+from cell_priors import ComposedPrior, InterventionKind, MapPfnPrior
 from cell_priors.samplers import GroupedScaleFreeSampler
 from cell_priors.simulators.sergio import SergioSimulator, SergioConfig
 from cell_priors.simulators.grn_paper import GrnPaperSimulator, GrnPaperConfig
 
 sampler = GroupedScaleFreeSampler(r=4.0, num_groups=3, kappa=10.0)
 
-# Same sampler, two different simulators — interchangeable priors:
+# Same sampler, different simulators — interchangeable priors:
 sergio = ComposedPrior(sampler, SergioSimulator(SergioConfig(num_cells=200, num_cell_types=2)))
 grnp   = ComposedPrior(sampler, GrnPaperSimulator(GrnPaperConfig(num_cells=200)))
+mappfn = MapPfnPrior(SergioConfig(num_cells=200), sampler=sampler)  # cycle-tolerant SERGIO
 
 params = sergio.sample_params(jax.random.PRNGKey(0), num_genes=100)   # sample GRN + kinetics
 obs    = sergio.observational(params, jax.random.PRNGKey(1))          # (cells, genes)
@@ -100,7 +108,10 @@ basal rate per cell type. Engineered for the prior+model loop:
   recast as a `lax.scan` fixed point that converges to the *exact* same values on a DAG.
 - **One `lax.scan`** for the whole SDE; the trajectory is sampled with a gather.
 - A sampled `GRN` is cyclic in general, so the SERGIO adapter breaks cycles (drops the
-  weakest edge per cycle) before simulating.
+  weakest edge per cycle) before simulating — *unless* you opt into the cycle-tolerant
+  mode (`SergioConfig(require_mrs=False)` + `SergioSimulator(..., acyclic=False)`, as used
+  by `MapPfnPrior`), which keeps every edge and gives every gene a basal production rate
+  so any GRN — cyclic, with no source nodes — is still driven.
 
 **`GrnPaperSimulator`** — the grn-paper model: a sigmoid-link SDE on a dense signed
 interaction matrix `β` with per-gene basal `α` and degradation `l`,
@@ -182,7 +193,23 @@ paper's DS1–DS14 profiles and is shared by both simulators.
 uv run python -m cell_priors.eval.benchmark_speed --genes 20,50,100,200 --cells 200
 uv run python -m cell_priors.eval.benchmark_speed --genes 100 --batch 16        # vmapped
 uv run python -m cell_priors.eval.benchmark_speed --simulator grn_paper --genes 50,100
+uv run python -m cell_priors.eval.benchmark_speed --simulator mappfn --genes 50,100
 ```
+
+**SERGIO vs. grn-paper.** At matched gene/cell counts and integration steps (128 cells,
+2150 steps, CPU), the SERGIO-based simulators are ~40–95× faster per network:
+
+| genes | `sergio` | `mappfn` | `grn_paper` |
+|------:|---------:|---------:|------------:|
+|    50 |  10 ms | 15 ms |  582 ms |
+|   100 |  10 ms | 23 ms |  995 ms |
+|   200 |  38 ms | 28 ms | 1474 ms |
+
+The gap is structural: SERGIO uses a *sparse* edge list (`O(E·C)` per step) and samples
+all cells of a type from one shared trajectory, so per-step cost is independent of the
+cell count; the grn-paper model integrates a *dense* `G×G` matrix (`O(cells·G²)` per step)
+over independent per-cell trajectories. The grn-paper model is the more expressive/general
+dynamics; SERGIO is the throughput choice for the prior+model loop.
 
 **End-to-end prior + model in one graph (throughput):**
 
