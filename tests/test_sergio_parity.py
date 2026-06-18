@@ -20,8 +20,8 @@ import jax
 import numpy as np
 from conftest import build_matched_grn, sergio_converged
 
-from cell_priors.priors.sergio import core
-from cell_priors.priors.sergio.grn import SergioConfig, make_params
+from cell_priors.simulators.sergio import core
+from cell_priors.simulators.sergio.params import SergioConfig, make_params
 
 DT = 0.01
 SAFETY = 4000

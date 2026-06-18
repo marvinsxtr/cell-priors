@@ -1,41 +1,39 @@
-"""The SERGIO prior: the uniform :class:`Prior` interface over the JAX core."""
+"""SERGIO as a :class:`Simulator` over the validated JAX core."""
 
 from __future__ import annotations
 
-from typing import Any
-
+import jax
 from jax import Array
 
-from ...base import InterventionKind, Prior
+from ...base import GRN, InterventionKind, Simulator
 from . import core, interventions
-from .grn import SergioConfig, SergioParams, sample_random_params
+from .adapter import grn_to_sergio_params
 from .noise import DS_PROFILES, add_technical_noise
+from .params import SergioConfig, SergioParams
 
 
-class SergioPrior(Prior):
-    """SERGIO single-cell expression prior.
+class SergioSimulator(Simulator):
+    """SERGIO stochastic-differential-equation expression simulator.
 
-    Wraps the pure functions in :mod:`core` with the uniform :class:`Prior` API.
-    ``cfg`` holds the static simulation hyperparameters; pass it as a jit static
-    argument when composing with a model.
+    ``cfg`` holds the static integration hyperparameters (cells, cell types,
+    iterations, dt, noise); the remaining keyword arguments configure the kinetic
+    parameters drawn when adapting a :class:`GRN`.
     """
 
-    def __init__(self, cfg: SergioConfig | None = None) -> None:
+    def __init__(self, cfg: SergioConfig | None = None, **kinetics: object) -> None:
         self.cfg = cfg or SergioConfig()
+        self.kinetics = kinetics
 
-    def sample_params(self, key: Array, num_genes: int = 100, **kwargs: Any) -> SergioParams:
-        return sample_random_params(key, num_genes, num_cell_types=self.cfg.num_cell_types, **kwargs)
+    def build_params(self, grn: GRN, key: Array) -> SergioParams:
+        return grn_to_sergio_params(grn, key, num_cell_types=self.cfg.num_cell_types, **self.kinetics)
 
-    def observational(
+    def simulate(
         self,
         params: SergioParams,
         key: Array,
         add_noise: bool = False,
         noise_profile: str = "DS6",
     ) -> Array:
-        """Simulate expression; optionally add technical (sequencing) noise."""
-        import jax
-
         k_sim, k_noise = jax.random.split(key)
         expr = core.simulate(params, k_sim, self.cfg)
         if add_noise:

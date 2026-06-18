@@ -20,7 +20,7 @@ import click
 import jax
 import jax.numpy as jnp
 
-from ..priors.sergio import SergioConfig, SergioPrior
+from ._common import build_prior
 
 
 def _init_model(key, num_genes, hidden):
@@ -55,10 +55,15 @@ def _model_loss(model, expr):
 @click.option("--lr", default=1e-2)
 @click.option("--safety-iter", default=100)
 @click.option("--scale-iter", default=5)
-def main(genes, cells, cell_types, hidden, batch, steps, lr, safety_iter, scale_iter):
+@click.option("--simulator", default="sergio", type=click.Choice(["sergio", "grn_paper"]))
+def main(genes, cells, cell_types, hidden, batch, steps, lr, safety_iter, scale_iter, simulator):
     """Run the prior+model training loop and report throughput."""
-    cfg = SergioConfig(num_cells=cells, num_cell_types=cell_types, safety_iter=safety_iter, scale_iter=scale_iter)
-    prior = SergioPrior(cfg)
+    if simulator == "sergio":
+        prior = build_prior(
+            "sergio", num_cells=cells, num_cell_types=cell_types, safety_iter=safety_iter, scale_iter=scale_iter
+        )
+    else:
+        prior = build_prior("grn_paper", num_cells=cells)
 
     key = jax.random.PRNGKey(0)
     params = prior.sample_params(jax.random.PRNGKey(1), num_genes=genes)

@@ -25,13 +25,14 @@ import numpy as np
 
 from ..base import InterventionKind
 from ..io import generate_anndata
-from ..priors.sergio import SergioConfig, SergioPrior
 from ..utils import summarize
+from ._common import build_prior
 
-
-def _default_prior(genes: int, cells: int, cell_types: int, noise: bool):
-    cfg = SergioConfig(num_cells=cells, num_cell_types=cell_types, safety_iter=120, scale_iter=5)
-    return SergioPrior(cfg)
+# Source names that generate fresh data from a prior (sampler x simulator).
+PRIOR_SOURCES = {
+    "sergio": dict(num_cell_types=1, safety_iter=120, scale_iter=5),
+    "grn_paper": dict(),
+}
 
 
 def load_source(
@@ -44,12 +45,18 @@ def load_source(
     strength: float = 1.0,
     seed: int = 0,
 ):
-    """Resolve a source string to an :class:`AnnData`."""
+    """Resolve a source string to an :class:`AnnData`.
+
+    ``sergio`` / ``grn_paper`` generate fresh data; ``path.h5ad`` reads a local
+    file; ``hf:<repo>/<file>`` downloads from a Hugging Face dataset.
+    """
     import anndata as ad
     import jax
 
-    if source == "sergio":
-        prior = _default_prior(genes, cells, cell_types, noise=True)
+    if source in PRIOR_SOURCES:
+        cfg = dict(PRIOR_SOURCES[source])
+        cfg["num_cells"] = cells
+        prior = build_prior(source, **cfg)
         return generate_anndata(
             prior,
             jax.random.PRNGKey(seed),

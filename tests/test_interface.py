@@ -7,20 +7,22 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from cell_priors.base import InterventionKind
-from cell_priors.priors.sergio import SergioConfig, SergioPrior
+from cell_priors.base import ComposedPrior, InterventionKind
+from cell_priors.samplers import GroupedScaleFreeSampler
+from cell_priors.simulators.sergio import SergioConfig, SergioSimulator
 
 
 @pytest.fixture
 def prior():
     cfg = SergioConfig(num_cells=30, num_cell_types=2, safety_iter=60, scale_iter=3, dt=0.01, noise_s=1.0)
-    return SergioPrior(cfg)
+    return ComposedPrior(GroupedScaleFreeSampler(r=3.0, num_groups=1), SergioSimulator(cfg))
 
 
 def test_observational_shape(prior):
     p = prior.sample_params(jax.random.PRNGKey(0), num_genes=15)
     expr = prior.observational(p, jax.random.PRNGKey(1))
-    assert expr.shape == (prior.cfg.num_cells * prior.cfg.num_cell_types, 15)
+    cfg = prior.simulator.cfg
+    assert expr.shape == (cfg.num_cells * cfg.num_cell_types, 15)
     assert not bool(jnp.isnan(expr).any())
     assert bool((expr >= 0).all())
 

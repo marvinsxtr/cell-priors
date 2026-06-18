@@ -1,5 +1,8 @@
-"""cell-priors: efficient, diverse priors for virtual cell foundation models."""
+"""cell-priors: efficient, diverse priors for virtual cell foundation models.
 
-from .base import InterventionKind, Prior
+A prior is a (GRN sampler x simulator) pair. Build one with :class:`ComposedPrior`.
+"""
 
-__all__ = ["Prior", "InterventionKind"]
+from .base import GRN, ComposedPrior, GRNSampler, InterventionKind, Prior, Simulator
+
+__all__ = ["Prior", "ComposedPrior", "GRN", "GRNSampler", "Simulator", "InterventionKind"]

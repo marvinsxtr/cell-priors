@@ -22,7 +22,7 @@ import dataclasses
 import jax.numpy as jnp
 from jax import Array
 
-from .grn import SergioParams, recompute_mr_mask
+from .params import SergioParams, recompute_mr_mask
 
 
 def _gene_onehot(gene_indices: Array, num_genes: int, dtype) -> Array:

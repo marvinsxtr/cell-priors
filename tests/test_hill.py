@@ -7,8 +7,8 @@ import dataclasses
 import jax.numpy as jnp
 import numpy as np
 
-from cell_priors.priors.sergio.core import _edge_production
-from cell_priors.priors.sergio.grn import make_params
+from cell_priors.simulators.sergio.core import _edge_production
+from cell_priors.simulators.sergio.params import make_params
 
 
 def _reference_hill(x_reg, h, n, k):

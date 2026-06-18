@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from cell_priors.priors.sergio.noise import DS_PROFILES, add_technical_noise, add_technical_noise_by_name
+from cell_priors.simulators.sergio.noise import DS_PROFILES, add_technical_noise, add_technical_noise_by_name
 
 
 def _expr():

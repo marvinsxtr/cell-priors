@@ -1,11 +1,11 @@
 """Benchmark prior simulation speed across dimensionalities and implementations.
 
-Compares the JAX SERGIO prior (compiled, single network and vmapped batch)
-against the ``sergio_rs`` Rust reference at several ``(num_genes, num_cells)``
-sizes. Clean CLI, no notebooks::
+Compares the JAX simulators (compiled, single network and vmapped batch) against
+the ``sergio_rs`` Rust reference where applicable, at several ``num_genes`` sizes.
+All networks come from the grouped scale-free sampler. Clean CLI, no notebooks::
 
     uv run python -m cell_priors.eval.benchmark_speed --genes 50,100,200 --cells 200
-    uv run python -m cell_priors.eval.benchmark_speed --batch 8 --no-rust
+    uv run python -m cell_priors.eval.benchmark_speed --simulator grn_paper --batch 8
 """
 
 from __future__ import annotations
@@ -13,22 +13,21 @@ from __future__ import annotations
 import click
 import jax
 
-from ..priors.sergio import SergioConfig
-from ..priors.sergio.core import simulate
-from ._common import build_matched_networks, timeit
+from ..simulators.sergio import SergioConfig
+from ..simulators.sergio.core import simulate as sergio_simulate
+from ._common import build_sampler, build_simulator, matched_sergio_networks, timeit
 
 
-def _bench_jax(params, cfg, batch, repeats):
-    sim = jax.jit(lambda p, k: simulate(p, k, cfg))
+def _bench_jax(sim_fn, params, batch, repeats):
     key = jax.random.PRNGKey(0)
     if batch > 1:
         keys = jax.random.split(key, batch)
-        fn = jax.jit(jax.vmap(lambda k: simulate(params, k, cfg)))
-        # compile
-        jax.block_until_ready(fn(keys))
+        fn = jax.jit(jax.vmap(lambda k: sim_fn(params, k)))
+        jax.block_until_ready(fn(keys))  # compile
         return timeit(lambda: fn(keys), repeats)
-    jax.block_until_ready(sim(params, key))  # compile
-    return timeit(lambda: sim(params, key), repeats)
+    fn = jax.jit(sim_fn)
+    jax.block_until_ready(fn(params, key))  # compile
+    return timeit(lambda: fn(params, key), repeats)
 
 
 def _bench_rust(grn, mr_profile, cfg, repeats):
@@ -50,39 +49,44 @@ def _bench_rust(grn, mr_profile, cfg, repeats):
 
 
 @click.command()
+@click.option("--simulator", default="sergio", type=click.Choice(["sergio", "grn_paper"]))
 @click.option("--genes", default="20,50,100", help="Comma-separated gene counts.")
-@click.option("--cells", default=200, help="Cells per cell type.")
-@click.option("--cell-types", default=1, help="Number of cell types.")
-@click.option("--avg-regulators", default=2.0, help="Average regulators per gene.")
+@click.option("--cells", default=200, help="Cells per cell type (sergio) / cells (grn_paper).")
+@click.option("--cell-types", default=1, help="Number of cell types (sergio only).")
 @click.option("--batch", default=1, help="vmap batch size for the JAX prior.")
-@click.option("--safety-iter", default=150)
-@click.option("--scale-iter", default=10)
 @click.option("--repeats", default=3)
-@click.option("--rust/--no-rust", default=True, help="Also benchmark sergio_rs.")
+@click.option("--rust/--no-rust", default=True, help="Also benchmark sergio_rs (sergio only).")
 @click.option("--seed", default=0)
-def main(genes, cells, cell_types, avg_regulators, batch, safety_iter, scale_iter, repeats, rust, seed):
+def main(simulator, genes, cells, cell_types, batch, repeats, rust, seed):
     """Run the speed benchmark and print a comparison table."""
     gene_list = [int(g) for g in genes.split(",")]
-    print(f"device={jax.devices()[0].platform}  cells={cells}  cell_types={cell_types}  batch={batch}")
+    sampler = build_sampler()
+    use_rust = rust and simulator == "sergio"
+    print(f"device={jax.devices()[0].platform}  simulator={simulator}  cells={cells}  batch={batch}")
     header = f"{'genes':>6} {'edges':>6} {'jax(ms)':>10} {'jax/net(ms)':>12}"
-    if rust:
+    if use_rust:
         header += f" {'rust(ms)':>10} {'speedup':>8}"
     print(header)
     print("-" * len(header))
 
     for ng in gene_list:
-        cfg = SergioConfig(
-            num_cells=cells,
-            num_cell_types=cell_types,
-            safety_iter=safety_iter,
-            scale_iter=scale_iter,
-        )
-        params, grn, mr_profile = build_matched_networks(ng, cell_types, avg_regulators, seed)
-        t_jax = _bench_jax(params, cfg, batch, repeats)
+        if simulator == "sergio":
+            cfg = SergioConfig(num_cells=cells, num_cell_types=cell_types)
+            params, grn, mr_profile = matched_sergio_networks(ng, cell_types, sampler, cfg, seed)
+            sim_fn = lambda p, k, cfg=cfg: sergio_simulate(p, k, cfg)  # noqa: E731
+            edges = int(params.num_edges)
+        else:
+            sim = build_simulator("grn_paper", num_cells=cells)
+            g = sampler.sample(jax.random.fold_in(jax.random.PRNGKey(seed), 1), ng)
+            params = sim.build_params(g, jax.random.PRNGKey(seed))
+            sim_fn = lambda p, k, sim=sim: sim.simulate(p, k)  # noqa: E731
+            edges = int(g.num_edges)
+
+        t_jax = _bench_jax(sim_fn, params, batch, repeats)
         per_net = t_jax / batch
-        row = f"{ng:>6} {params.num_edges:>6} {t_jax * 1e3:>10.2f} {per_net * 1e3:>12.2f}"
-        if rust:
-            t_rust = _bench_rust(grn, mr_profile, cfg, repeats) * batch  # rust does `batch` networks serially
+        row = f"{ng:>6} {edges:>6} {t_jax * 1e3:>10.2f} {per_net * 1e3:>12.2f}"
+        if use_rust:
+            t_rust = _bench_rust(grn, mr_profile, cfg, repeats) * batch
             row += f" {t_rust * 1e3:>10.2f} {t_rust / t_jax:>8.2f}x"
         print(row)
 

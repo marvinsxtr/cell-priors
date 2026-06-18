@@ -30,7 +30,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array, lax, random
 
-from .grn import SergioConfig, SergioParams
+from .params import SergioConfig, SergioParams
 
 
 def _edge_production(x: Array, p: SergioParams) -> Array:
