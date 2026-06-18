@@ -1,13 +1,6 @@
 <h1 align="center">cell-priors</h1>
 
-cell-priors is a JAX library of efficient, diverse **priors** for virtual-cell
-foundation-model pretraining: generative gene-regulatory-network simulators you can
-pretrain a model against, end-to-end, inside a single JAX graph.
-
-A prior factorizes into two swappable pieces — a **GRN sampler** (draws a network
-*structure*: which genes regulate which) and a **simulator** (turns that structure into
-single-cell expression and defines how interventions act). Any sampler composes with any
-simulator through `cell_priors.base.ComposedPrior`.
+Efficient and diverse virtual-cell priors in JAX for end-to-end pretraining.
 
 Features include:
 
@@ -22,12 +15,6 @@ Features include:
 - hard knockouts and soft CRISPRi knockdowns under a common intervention API;
 - MapPFN-format `.h5ad` export, plus speed benchmarks and distributional comparison
   against real datasets.
-
-From a technical point of view, the nice part is the sampler/simulator split: network
-*structure* and expression *dynamics* are separated behind a single interface, so one
-benchmark or training loop can mix and match them — and because the whole prior is just
-pure JAX arrays, it drops straight into a model's computation graph rather than being a
-separate, host-side data-loading stage.
 
 ![SERGIO prior throughput across backends](assets/throughput.png)
 
