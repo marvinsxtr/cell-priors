@@ -165,7 +165,10 @@ def sample_random_params(
     Production rates are drawn per gene per cell type as a Bernoulli mixture of a
     low and a high uniform range, matching SERGIO's ``MrProfile.from_random``.
     """
-    seed = int(key_or_seed) if np.isscalar(key_or_seed) else int(jax.random.randint(key_or_seed, (), 0, 2**31))
+    if np.isscalar(key_or_seed):
+        seed = int(key_or_seed)
+    else:
+        seed = int(jax.random.randint(key_or_seed, (), 0, 2**31 - 1))
     rng = np.random.default_rng(seed)
 
     reg_idx, tar_idx = random_dag_edges(rng, num_genes, avg_regulators)
