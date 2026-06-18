@@ -304,3 +304,8 @@ the grn-paper grouped scale-free GRN model.
   pages   = {1--31}
 }
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 Marvin Sextro. This is an independent JAX reimplementation;
+see the upstream SERGIO, `sergio_rs` and grn-paper projects for the original work.
