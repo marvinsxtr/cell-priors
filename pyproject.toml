@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cell-priors"
 version = "0.0.1"
-description = "Efficient and diverse virtual-cell priors in JAX for end-to-end pretraining."
+description = "Efficient and diverse virtual cell priors in JAX for end-to-end pretraining."
 requires-python = "==3.12.*"
 license = "MIT"
 license-files = ["LICENSE"]

@@ -1,6 +1,6 @@
 <h1 align="center">cell-priors</h1>
 
-Efficient and diverse virtual-cell priors in JAX for end-to-end pretraining.
+Efficient and diverse virtual cell priors in JAX for end-to-end pretraining.
 
 Features include:
 
@@ -298,7 +298,7 @@ builds on:
 ```bibtex
 @software{sextro_cell_priors_2026,
   author  = {Sextro, Marvin},
-  title   = {{cell-priors}: Efficient and diverse virtual-cell priors in {JAX} for end-to-end pretraining},
+  title   = {{cell-priors}: Efficient and diverse virtual cell priors in {JAX} for end-to-end pretraining},
   year    = {2026},
   url     = {https://github.com/marvinsxtr/cell-priors}
 }
