@@ -1,6 +1,6 @@
 # cell-priors
 
-Efficient and diverse **priors** for virtual-cell foundation-model pretraining — with a
+Efficient and diverse **virtual-cell priors in JAX** for end-to-end pretraining — with a
 uniform interface so priors can be benchmarked and compared against each other and
 against real data.
 
@@ -295,7 +295,7 @@ builds on:
 ```bibtex
 @software{sextro_cell_priors_2026,
   author  = {Sextro, Marvin},
-  title   = {{cell-priors}: Efficient and diverse priors for virtual cell foundation model pretraining},
+  title   = {{cell-priors}: Efficient and diverse virtual-cell priors in {JAX} for end-to-end pretraining},
   year    = {2026},
   url     = {https://github.com/marvinsxtr/cell-priors}
 }
