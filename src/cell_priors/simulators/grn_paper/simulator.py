@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from ...base import GRN, InterventionKind, Simulator
+from ..sergio.noise import NoiseProfile
 from . import core
 from .core import GrnPaperConfig, GrnPaperParams
 from .noise import maybe_add_noise
@@ -54,7 +55,7 @@ class GrnPaperSimulator(Simulator):
         params: GrnPaperParams,
         key: Array,
         add_noise: bool = False,
-        noise_profile: str = "DS6",
+        noise_profile: str | NoiseProfile = "DS6",
     ) -> Array:
         k_sim, k_noise = jax.random.split(key)
         expr = core.simulate(params, k_sim, self.cfg)

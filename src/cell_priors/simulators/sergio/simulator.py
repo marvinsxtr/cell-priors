@@ -8,7 +8,7 @@ from jax import Array
 from ...base import GRN, InterventionKind, Simulator
 from . import core, interventions
 from .adapter import grn_to_sergio_params
-from .noise import DS_PROFILES, add_technical_noise
+from .noise import NoiseProfile, add_technical_noise, resolve_profile
 from .params import SergioConfig, SergioParams
 
 
@@ -32,12 +32,14 @@ class SergioSimulator(Simulator):
         params: SergioParams,
         key: Array,
         add_noise: bool = False,
-        noise_profile: str = "DS6",
+        noise_profile: str | NoiseProfile = "DS6",
     ) -> Array:
+        """Simulate expression; ``noise_profile`` is a DS preset name or a custom
+        :class:`NoiseProfile` (pass arbitrary technical-noise hyperparameters directly)."""
         k_sim, k_noise = jax.random.split(key)
         expr = core.simulate(params, k_sim, self.cfg)
         if add_noise:
-            expr = add_technical_noise(k_noise, expr, DS_PROFILES[noise_profile])
+            expr = add_technical_noise(k_noise, expr, resolve_profile(noise_profile))
         return expr
 
     def intervene(

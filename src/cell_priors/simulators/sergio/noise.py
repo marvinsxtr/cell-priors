@@ -92,6 +92,11 @@ def add_technical_noise(key: Array, expr: Array, profile: NoiseProfile) -> Array
     return expr
 
 
-def add_technical_noise_by_name(key: Array, expr: Array, profile: str = "DS6") -> Array:
-    """Convenience wrapper selecting a DS profile by name."""
-    return add_technical_noise(key, expr, DS_PROFILES[profile])
+def resolve_profile(profile: str | NoiseProfile) -> NoiseProfile:
+    """Accept a DS preset name or an explicit :class:`NoiseProfile`."""
+    return DS_PROFILES[profile] if isinstance(profile, str) else profile
+
+
+def add_technical_noise_by_name(key: Array, expr: Array, profile: str | NoiseProfile = "DS6") -> Array:
+    """Convenience wrapper accepting a DS profile name or a :class:`NoiseProfile`."""
+    return add_technical_noise(key, expr, resolve_profile(profile))

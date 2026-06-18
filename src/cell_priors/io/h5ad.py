@@ -20,6 +20,7 @@ import pandas as pd
 from jax import Array
 
 from ..base import InterventionKind, Prior
+from ..simulators.sergio.noise import NoiseProfile
 
 # Column names / sentinel values mirrored from MapPFN (map_pfn.data.utils).
 CONTEXT_COL = "context"
@@ -41,7 +42,7 @@ def generate_anndata(
     kind: InterventionKind = InterventionKind.KNOCKOUT,
     strength: float = 1.0,
     add_noise: bool = True,
-    noise_profile: str = "DS6",
+    noise_profile: str | NoiseProfile = "DS6",
     sample_kwargs: dict | None = None,
 ) -> ad.AnnData:
     """Generate a control + interventional dataset as an :class:`AnnData`.
