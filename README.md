@@ -188,7 +188,9 @@ adata = generate_anndata(sergio, jax.random.PRNGKey(0),
 write_h5ad(adata, "sergio.h5ad")
 ```
 
-Output matches MapPFN: `adata.X` is counts `(cells, genes)`, `adata.var_names` are
+Output matches [MapPFN](https://github.com/marvinsxtr/MapPFN) — a separate but adjacent
+project (the in-context causal-perturbation model these priors are designed to pretrain;
+see [References](#references)): `adata.X` is counts `(cells, genes)`, `adata.var_names` are
 `GENE0000…`, and `adata.obs` has `context` (GRN id) and `treatment` (perturbed gene id or
 `"control"`). Technical noise (outlier / library-size / dropout / UMI) uses the SERGIO
 paper's DS1–DS14 profiles and is shared by both simulators.
@@ -305,7 +307,9 @@ builds on:
 ## References
 
 This work reimplements and builds on the SERGIO simulator, its Rust port `sergio_rs`, and
-the grn-paper grouped scale-free GRN model.
+the grn-paper grouped scale-free GRN model. It is developed alongside
+[MapPFN](https://github.com/marvinsxtr/MapPFN) — a separate but adjacent project, the
+in-context causal-perturbation model these priors are designed to pretrain.
 
 ```bibtex
 @article{dibaeinia_sergio_2020,
@@ -334,6 +338,13 @@ the grn-paper grouped scale-free GRN model.
   author  = {Aguirre, Matthew and Spence, Jeffrey P. and Sella, Guy and Pritchard, Jonathan K.},
   year    = {2025},
   pages   = {1--31}
+}
+
+@inproceedings{sextro_mappfn_2026,
+  title     = {{MapPFN}: Learning Causal Perturbation Maps in Context},
+  author    = {Sextro, Marvin and K\l{}os, Weronika and Dernbach, Gabriel},
+  booktitle = {ICLR 2026 Workshop on Generative AI in Genomics ({Gen}^2)},
+  year      = {2026}
 }
 ```
 
