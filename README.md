@@ -196,21 +196,6 @@ uv run python -m cell_priors.eval.benchmark_speed --simulator grn_paper --genes 
 uv run python -m cell_priors.eval.benchmark_speed --simulator mappfn --genes 50,100
 ```
 
-**SERGIO vs. grn-paper.** At matched gene/cell counts and integration steps (128 cells,
-2150 steps, CPU), the SERGIO-based simulators are ~40–95× faster per network:
-
-| genes | `sergio` | `mappfn` | `grn_paper` |
-|------:|---------:|---------:|------------:|
-|    50 |  10 ms | 15 ms |  582 ms |
-|   100 |  10 ms | 23 ms |  995 ms |
-|   200 |  38 ms | 28 ms | 1474 ms |
-
-The gap is structural: SERGIO uses a *sparse* edge list (`O(E·C)` per step) and samples
-all cells of a type from one shared trajectory, so per-step cost is independent of the
-cell count; the grn-paper model integrates a *dense* `G×G` matrix (`O(cells·G²)` per step)
-over independent per-cell trajectories. The grn-paper model is the more expressive/general
-dynamics; SERGIO is the throughput choice for the prior+model loop.
-
 **End-to-end prior + model in one graph (throughput):**
 
 ```bash

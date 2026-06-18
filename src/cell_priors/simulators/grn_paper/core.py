@@ -37,6 +37,13 @@ class GrnPaperParams:
     def num_genes(self) -> int:
         return self.alpha.shape[0]
 
+    @classmethod
+    def from_dense(cls, beta, alpha, l, group=None) -> "GrnPaperParams":
+        """Build params from a dense ``(G, G)`` interaction matrix ``beta``."""
+        alpha = jnp.asarray(alpha)
+        group = jnp.zeros(alpha.shape[0], jnp.int32) if group is None else jnp.asarray(group)
+        return cls(beta=jnp.asarray(beta), alpha=alpha, l=jnp.asarray(l), group=group)
+
 
 @dataclass(frozen=True)
 class GrnPaperConfig:
