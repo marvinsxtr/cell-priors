@@ -41,4 +41,4 @@ USER devuser
 RUN --mount=type=cache,target=/home/devuser/.cache/uv,uid=1000 \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --all-groups
+    uv sync --frozen --no-install-project --all-groups --extra cuda
