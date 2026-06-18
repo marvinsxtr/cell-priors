@@ -3,7 +3,7 @@ message: "If you use this software, please cite it as below."
 authors:
   - family-names: "Sextro"
     given-names: "Marvin"
-title: "cell-priors: Efficient and diverse priors for virtual cell foundation model pretraining"
+title: "cell-priors: Efficient and diverse virtual-cell priors in JAX for end-to-end pretraining"
 version: 0.0.1
 date-released: 2026-06-18
 url: "https://github.com/marvinsxtr/cell-priors"
