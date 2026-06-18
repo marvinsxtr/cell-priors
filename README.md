@@ -15,7 +15,7 @@ A prior factorizes into two swappable pieces:
 Any sampler composes with any simulator through `cell_priors.base.ComposedPrior`.
 Everything is a pytree of JAX arrays and every sampling/simulation method is a pure
 function of `(params, key)`, so a prior + model can train together *inside a single JAX
-graph* on the GPU with no host round-trip, in the spirit of [purejaxrl].
+graph* on the GPU with no host round-trip.
 
 Currently included:
 
@@ -27,7 +27,6 @@ Currently included:
 
 [SERGIO]: https://github.com/PayamDibaeinia/SERGIO
 [`sergio_rs`]: https://github.com/rainx0r/sergio_rs
-[purejaxrl]: https://github.com/luchris429/purejaxrl
 [grn-paper]: https://github.com/maguirre1/grn-paper
 
 ---
@@ -267,7 +266,7 @@ builds on:
   author  = {Sextro, Marvin},
   title   = {{cell-priors}: Efficient, diverse priors for virtual cell foundation model pretraining},
   year    = {2026},
-  url      = {https://github.com/marvinsxtr/cell-priors}
+  url     = {https://github.com/marvinsxtr/cell-priors}
 }
 ```
 
@@ -288,12 +287,11 @@ the grn-paper grouped scale-free GRN model.
 }
 
 @software{Chatzaroulas_sergio_rs_The_SERGIO_2024,
-  author = {Chatzaroulas, Evangelos},
-  month = apr,
-  title = {{sergio\_rs: The SERGIO v2 simulator rewritten in Rust}},
-  url = {https://github.com/rainx0r/sergio_rs},
+  author  = {Chatzaroulas, Evangelos},
+  title   = {{sergio\_rs}: The {SERGIO} v2 simulator rewritten in {Rust}},
   version = {0.2.2},
-  year = {2024}
+  year    = {2024},
+  url     = {https://github.com/rainx0r/sergio_rs}
 }
 
 @article{aguirre_gene_2025,
