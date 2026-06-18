@@ -30,8 +30,17 @@ def build_simulator(name: str, **cfg_kwargs: Any) -> Simulator:
 
 
 def build_prior(simulator: str = "sergio", sampler_kwargs: dict | None = None, **cfg_kwargs: Any) -> ComposedPrior:
-    """Compose the grouped scale-free sampler with a named simulator."""
-    return ComposedPrior(build_sampler(**(sampler_kwargs or {})), build_simulator(simulator, **cfg_kwargs))
+    """Compose the grouped scale-free sampler with a named prior/simulator.
+
+    ``mappfn`` is the cycle-tolerant SERGIO prior (any GRN, no required master
+    regulators); ``sergio`` and ``grn_paper`` are the strict simulators.
+    """
+    from ..priors import MapPfnPrior
+
+    sampler = build_sampler(**(sampler_kwargs or {}))
+    if simulator == "mappfn":
+        return MapPfnPrior(SergioConfig(**cfg_kwargs), sampler=sampler)
+    return ComposedPrior(sampler, build_simulator(simulator, **cfg_kwargs))
 
 
 def matched_sergio_networks(num_genes: int, num_cell_types: int, sampler: GRNSampler, cfg: SergioConfig, seed: int):

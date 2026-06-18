@@ -69,6 +69,7 @@ class SergioConfig:
     dt: float = 0.01
     noise_s: float = 1.0
     init_iters: int | None = None  # steady-state fixed-point iterations; None -> num_genes
+    require_mrs: bool = True  # False -> basal production for every gene (cycle-tolerant)
 
     @property
     def max_iter(self) -> int:

@@ -15,7 +15,7 @@ import jax
 
 from ..simulators.sergio import SergioConfig
 from ..simulators.sergio.core import simulate as sergio_simulate
-from ._common import build_sampler, build_simulator, matched_sergio_networks, timeit
+from ._common import build_prior, build_sampler, matched_sergio_networks, timeit
 
 
 def _bench_jax(sim_fn, params, batch, repeats):
@@ -49,7 +49,7 @@ def _bench_rust(grn, mr_profile, cfg, repeats):
 
 
 @click.command()
-@click.option("--simulator", default="sergio", type=click.Choice(["sergio", "grn_paper"]))
+@click.option("--simulator", default="sergio", type=click.Choice(["sergio", "mappfn", "grn_paper"]))
 @click.option("--genes", default="20,50,100", help="Comma-separated gene counts.")
 @click.option("--cells", default=200, help="Cells per cell type (sergio) / cells (grn_paper).")
 @click.option("--cell-types", default=1, help="Number of cell types (sergio only).")
@@ -76,11 +76,10 @@ def main(simulator, genes, cells, cell_types, batch, repeats, rust, seed):
             sim_fn = lambda p, k, cfg=cfg: sergio_simulate(p, k, cfg)  # noqa: E731
             edges = int(params.num_edges)
         else:
-            sim = build_simulator("grn_paper", num_cells=cells)
-            g = sampler.sample(jax.random.fold_in(jax.random.PRNGKey(seed), 1), ng)
-            params = sim.build_params(g, jax.random.PRNGKey(seed))
-            sim_fn = lambda p, k, sim=sim: sim.simulate(p, k)  # noqa: E731
-            edges = int(g.num_edges)
+            prior = build_prior(simulator, num_cells=cells)
+            params = prior.sample_params(jax.random.PRNGKey(seed), num_genes=ng)
+            sim_fn = lambda p, k, prior=prior: prior.observational(p, k)  # noqa: E731
+            edges = int(getattr(params, "num_edges", 0))
 
         t_jax = _bench_jax(sim_fn, params, batch, repeats)
         per_net = t_jax / batch

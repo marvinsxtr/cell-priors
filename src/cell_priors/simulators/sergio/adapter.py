@@ -47,9 +47,16 @@ def grn_to_sergio_params(
     repression_prob: float = 0.0,
     mr_low_range: tuple[float, float] = (0.5, 2.0),
     mr_high_range: tuple[float, float] = (3.0, 5.0),
+    acyclic: bool = True,
     dtype=None,
 ) -> SergioParams:
-    """Build :class:`SergioParams` from a :class:`GRN` (host-side, seeded by ``key``)."""
+    """Build :class:`SergioParams` from a :class:`GRN` (host-side, seeded by ``key``).
+
+    ``acyclic=True`` (default) breaks cycles so standard SERGIO's topological
+    steady-state estimate applies. Set ``acyclic=False`` to keep the graph as-is
+    (used by the cycle-tolerant MapPFN prior, which also drops the master-regulator
+    requirement via ``SergioConfig.require_mrs=False``).
+    """
     import jax
 
     seed = int(jax.random.randint(key, (), 0, 2**31 - 1))
@@ -65,9 +72,10 @@ def grn_to_sergio_params(
     sign = np.where(rng.random(e) < repression_prob, -1.0, 1.0)
     k = k_mag * sign
 
-    # Break cycles using |k| as the edge weight, then keep the acyclic subset.
-    keep = _acyclic_edge_mask(reg, tar, np.abs(k), num_genes)
-    reg, tar, k, hill_n = reg[keep], tar[keep], k[keep], hill_n[keep]
+    if acyclic:
+        # Break cycles using |k| as the edge weight, then keep the acyclic subset.
+        keep = _acyclic_edge_mask(reg, tar, np.abs(k), num_genes)
+        reg, tar, k, hill_n = reg[keep], tar[keep], k[keep], hill_n[keep]
 
     decay = rng.uniform(*decay_range, size=num_genes)
     high = rng.random((num_genes, num_cell_types)) < 0.5

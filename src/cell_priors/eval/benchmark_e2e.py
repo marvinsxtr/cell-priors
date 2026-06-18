@@ -55,12 +55,12 @@ def _model_loss(model, expr):
 @click.option("--lr", default=1e-2)
 @click.option("--safety-iter", default=100)
 @click.option("--scale-iter", default=5)
-@click.option("--simulator", default="sergio", type=click.Choice(["sergio", "grn_paper"]))
+@click.option("--simulator", default="sergio", type=click.Choice(["sergio", "mappfn", "grn_paper"]))
 def main(genes, cells, cell_types, hidden, batch, steps, lr, safety_iter, scale_iter, simulator):
     """Run the prior+model training loop and report throughput."""
-    if simulator == "sergio":
+    if simulator in ("sergio", "mappfn"):
         prior = build_prior(
-            "sergio", num_cells=cells, num_cell_types=cell_types, safety_iter=safety_iter, scale_iter=scale_iter
+            simulator, num_cells=cells, num_cell_types=cell_types, safety_iter=safety_iter, scale_iter=scale_iter
         )
     else:
         prior = build_prior("grn_paper", num_cells=cells)

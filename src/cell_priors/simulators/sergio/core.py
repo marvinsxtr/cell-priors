@@ -57,10 +57,22 @@ def _edge_production(x: Array, p: SergioParams) -> Array:
     return jax.ops.segment_sum(contrib, p.tar_idx, num_segments=g)
 
 
-def _production(x: Array, p: SergioParams, prod_rates: Array) -> Array:
-    """Total production rate per gene: basal for MRs, Hill sum otherwise."""
+def _production(x: Array, p: SergioParams, prod_rates: Array, require_mrs: bool = True) -> Array:
+    """Total production rate per gene.
+
+    Standard SERGIO (``require_mrs=True``): master regulators use their basal
+    ``prod_rates`` and every other gene is driven purely by its Hill inputs -- which
+    requires a DAG with master-regulator sources to have any drive.
+
+    Permissive / cycle-tolerant mode (``require_mrs=False``): *every* gene gets its
+    basal ``prod_rates`` plus its Hill inputs, so any GRN -- cyclic, with no source
+    nodes -- is still driven. This is the basis of the MapPFN prior.
+    """
     p_hill = _edge_production(x, p)
-    out = jnp.where(p.mr_mask[:, None] > 0, prod_rates, p_hill)
+    if require_mrs:
+        out = jnp.where(p.mr_mask[:, None] > 0, prod_rates, p_hill)
+    else:
+        out = prod_rates + p_hill
     out = out * p.prod_scale[:, None]
     return jnp.maximum(out, 0.0)
 
@@ -81,7 +93,7 @@ def init_steady_state(p: SergioParams, cfg: SergioConfig) -> tuple[SergioParams,
         ss, _h = carry
         h_new = jnp.mean(ss[p.reg_idx], axis=1)  # (E,) mean over cell types of regulator ss
         p_h = dataclasses.replace(p, h=h_new)
-        prod = _production(ss, p_h, p.prod_rates)
+        prod = _production(ss, p_h, p.prod_rates, cfg.require_mrs)
         ss_new = prod / decay
         return (ss_new, h_new), None
 
@@ -106,7 +118,7 @@ def simulate_trajectory(p: SergioParams, ss: Array, key: Array, cfg: SergioConfi
 
     def step(x, key_t):
         kp, kd = random.split(key_t)
-        prod = _production(x, p, p.prod_rates)
+        prod = _production(x, p, p.prod_rates, cfg.require_mrs)
         d = decay * x
         eps_p = random.normal(kp, x.shape)
         eps_d = random.normal(kd, x.shape)

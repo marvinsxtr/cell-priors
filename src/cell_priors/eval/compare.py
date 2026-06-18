@@ -31,6 +31,7 @@ from ._common import build_prior
 # Source names that generate fresh data from a prior (sampler x simulator).
 PRIOR_SOURCES = {
     "sergio": dict(num_cell_types=1, safety_iter=120, scale_iter=5),
+    "mappfn": dict(num_cell_types=1, safety_iter=120, scale_iter=5),
     "grn_paper": dict(),
 }
 
