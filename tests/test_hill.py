@@ -39,7 +39,10 @@ def test_activation_and_repression_match_reference():
 
 def test_repression_is_high_at_zero_regulator():
     # A pure repressor: at x_reg=0 the Hill term is 0 so contribution == |k|.
-    p = _with_h(make_params(np.array([0]), np.array([1]), np.array([-4.0]), np.array([2.0]), np.ones(2), np.ones((2, 1))), [1.0])
+    p = _with_h(
+        make_params(np.array([0]), np.array([1]), np.array([-4.0]), np.array([2.0]), np.ones(2), np.ones((2, 1))),
+        [1.0],
+    )
     prod = np.asarray(_edge_production(jnp.asarray([[0.0], [0.0]]), p))
     assert abs(prod[1, 0] - 4.0) < 1e-6
 

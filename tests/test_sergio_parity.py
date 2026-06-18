@@ -18,11 +18,10 @@ from __future__ import annotations
 
 import jax
 import numpy as np
+from conftest import build_matched_grn, sergio_converged
 
 from cell_priors.priors.sergio import core
 from cell_priors.priors.sergio.grn import SergioConfig, make_params
-
-from conftest import build_matched_grn, sergio_converged
 
 DT = 0.01
 SAFETY = 4000
@@ -44,7 +43,9 @@ def _parity(edges, decay, hill_n, k, num_cell_types, mr_seed):
         prod_rates[i] = sergio_ss[i] * decay[i]
 
     p = make_params(reg_idx, tar_idx, k, hill_n, decay, prod_rates)
-    cfg = SergioConfig(num_cells=NCELL, num_cell_types=num_cell_types, safety_iter=SAFETY, scale_iter=SCALE, dt=DT, noise_s=0.0)
+    cfg = SergioConfig(
+        num_cells=NCELL, num_cell_types=num_cell_types, safety_iter=SAFETY, scale_iter=SCALE, dt=DT, noise_s=0.0
+    )
     p_init, ss = core.init_steady_state(p, cfg)
     traj = core.simulate_trajectory(p_init, ss, jax.random.PRNGKey(0), cfg)
     my_ss = np.asarray(traj[-1])

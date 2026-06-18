@@ -63,7 +63,7 @@ def generate_anndata(
         params = prior.sample_params(k_params, num_genes=num_genes, **sample_kwargs)
         ctx_id = str(ctx)
 
-        def _add(expr: Array, treatment_id: str) -> None:
+        def _add(expr: Array, treatment_id: str, ctx_id: str = ctx_id) -> None:
             arr = np.asarray(expr)
             x_blocks.append(arr)
             contexts.extend([ctx_id] * arr.shape[0])

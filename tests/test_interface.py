@@ -37,8 +37,12 @@ def test_knockdown_is_monotone_in_strength(prior):
     g = int(np.where(np.asarray(p.mr_mask) > 0)[0][0])
     key = jax.random.PRNGKey(1)
     obs = float(prior.observational(p, key)[:, g].mean())
-    kd_half = float(prior.interventional(p, key, jnp.array([g]), kind=InterventionKind.KNOCKDOWN, strength=0.5)[:, g].mean())
-    kd_full = float(prior.interventional(p, key, jnp.array([g]), kind=InterventionKind.KNOCKDOWN, strength=1.0)[:, g].mean())
+    kd_half = float(
+        prior.interventional(p, key, jnp.array([g]), kind=InterventionKind.KNOCKDOWN, strength=0.5)[:, g].mean()
+    )
+    kd_full = float(
+        prior.interventional(p, key, jnp.array([g]), kind=InterventionKind.KNOCKDOWN, strength=1.0)[:, g].mean()
+    )
     # Stronger knockdown => lower expression of the targeted gene.
     assert kd_full <= kd_half <= obs + 1e-3
     assert kd_full < obs

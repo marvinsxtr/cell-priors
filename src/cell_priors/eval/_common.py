@@ -9,7 +9,7 @@ from typing import Any
 import jax
 import numpy as np
 
-from ..priors.sergio import SergioConfig, SergioParams, SergioPrior
+from ..priors.sergio import SergioConfig, SergioPrior
 from ..priors.sergio.grn import random_dag_edges
 
 

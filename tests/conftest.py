@@ -6,8 +6,6 @@ import numpy as np
 import pytest
 import sergio_rs
 
-from cell_priors.priors.sergio.grn import make_params
-
 
 def gene_name(i: int) -> str:
     """Match the gene naming used so sergio_rs sorted order == index order."""
@@ -37,7 +35,16 @@ def build_matched_grn(edges, decay, hill_n, k, num_cell_types, mr_seed):
     )
     reg_idx = np.array([r for r, _ in edges])
     tar_idx = np.array([t for _, t in edges])
-    return grn, mr_profile, num_genes, reg_idx, tar_idx, np.asarray(k), np.asarray(hill_n, dtype=float), np.asarray(decay)
+    return (
+        grn,
+        mr_profile,
+        num_genes,
+        reg_idx,
+        tar_idx,
+        np.asarray(k),
+        np.asarray(hill_n, dtype=float),
+        np.asarray(decay),
+    )
 
 
 def sergio_converged(grn, mr_profile, num_genes, num_cell_types, safety_iter, num_cells, scale_iter, dt):

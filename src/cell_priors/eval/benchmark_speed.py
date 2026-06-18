@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import click
 import jax
-import numpy as np
 
 from ..priors.sergio import SergioConfig
 from ..priors.sergio.core import simulate

@@ -7,7 +7,7 @@ per-gene moments, and simple distributional summaries for comparing priors.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 import numpy as np
 from numpy.typing import NDArray

@@ -17,13 +17,13 @@ graph with no host round-trip.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from jax import Array
 
 
-class InterventionKind(str, Enum):
+class InterventionKind(StrEnum):
     """Supported intervention semantics."""
 
     KNOCKOUT = "knockout"  # hard: gene and its regulatory edges removed
