@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cell-priors"
+version = "0.0.1"
+description = "Benchmarking and developing efficient, diverse priors for virtual cell foundation model pretraining."
+requires-python = "==3.12.*"
+dependencies = [
+  "jax>=0.5.3",
+  "numpy>=1.26.4",
+  "scipy>=1.16.1",
+  "anndata>=0.10.8",
+  "scanpy>=1.10.0",
+  "pandas>=2.2.0",
+  "matplotlib>=3.8.1",
+  "seaborn>=0.13.2",
+  "click>=8.1.7",
+  "huggingface-hub>=0.34.3",
+  "datasets>=4.0.0",
+  "sergio-rs>=0.2.1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3.5", "ruff>=0.8.0", "pre-commit>=4.0.1"]
+
+[project.optional-dependencies]
+cuda = ["jax[cuda12]>=0.5.3"]
+
+[project.scripts]
+cell-priors-benchmark = "cell_priors.eval.benchmark_speed:main"
+cell-priors-compare = "cell_priors.eval.compare:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+sergio_rs = [
+  { url = "https://github.com/marvinsxtr/sergio_rs/releases/download/v0.2.1/sergio_rs-0.2.1-cp312-cp312-linux_x86_64.whl", marker = "platform_machine == 'x86_64'" },
+  { url = "https://github.com/marvinsxtr/sergio_rs/releases/download/v0.2.1/sergio_rs-0.2.1-cp312-cp312-linux_aarch64.whl", marker = "platform_machine == 'aarch64'" },
+]
+
+[tool.uv]
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 119
+indent-width = 4
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "NPY"]
+ignore = ["E741", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E501"]
