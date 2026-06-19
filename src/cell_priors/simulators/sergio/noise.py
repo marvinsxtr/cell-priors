@@ -11,13 +11,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import jax
 import jax.numpy as jnp
 from jax import Array, random
 
 
 @dataclass(frozen=True)
 class NoiseProfile:
-    """Technical-noise parameters (the SERGIO paper's DS1-DS14 presets)."""
+    """Technical-noise parameters (the SERGIO paper's DS1-DS14 presets).
+
+    Registered as a JAX pytree, so every field may be a traced ``Array`` rather
+    than a Python ``float``. This lets callers pass parameters *directly* -- e.g.
+    a profile whose parameters are sampled per network from ranges -- and have it
+    flow through ``jit``/``vmap`` instead of being limited to a fixed preset.
+    """
 
     outlier_mu: float
     library_mu: float
@@ -26,6 +33,21 @@ class NoiseProfile:
     dropout_q: float
     outlier_p: float = 0.01
     outlier_sigma: float = 1.0
+
+
+jax.tree_util.register_dataclass(
+    NoiseProfile,
+    data_fields=[
+        "outlier_mu",
+        "library_mu",
+        "library_sigma",
+        "dropout_k",
+        "dropout_q",
+        "outlier_p",
+        "outlier_sigma",
+    ],
+    meta_fields=[],
+)
 
 
 # SERGIO paper dataset profiles, from sergio_rs/src/noise.rs.
