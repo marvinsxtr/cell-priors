@@ -62,8 +62,11 @@ def grn_to_sergio_params(
     seed = int(jax.random.randint(key, (), 0, 2**31 - 1))
     rng = np.random.default_rng(seed)
 
-    reg = np.asarray(grn.reg_idx)
-    tar = np.asarray(grn.tar_idx)
+    # Keep only real edges; the sampler stores a fixed-size edge buffer where padding
+    # and self-loop slots carry zero weight.
+    real = np.asarray(grn.weight) > 0
+    reg = np.asarray(grn.reg_idx)[real]
+    tar = np.asarray(grn.tar_idx)[real]
     num_genes = grn.num_genes
     e = len(reg)
 

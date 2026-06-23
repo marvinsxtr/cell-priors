@@ -31,7 +31,8 @@ def test_knockout_zeros_outgoing_edges():
     sim = GrnPaperSimulator(GrnPaperConfig(num_cells=4, n_steps=200, burnin=100))
     p = ComposedPrior(sampler, sim).sample_params(jax.random.PRNGKey(0), num_genes=20)
     reg = np.asarray(p.reg_idx)
-    g = int(np.bincount(reg, minlength=p.num_genes).argmax())  # a hub regulator
+    real = np.asarray(p.beta) != 0.0  # ignore masked (zero-weight) padding slots
+    g = int(np.bincount(reg[real], minlength=p.num_genes).argmax())  # a hub regulator
     ko = knockout(p, jnp.array([g]))
     out_edges = np.asarray(ko.reg_idx) == g
     assert float(jnp.abs(jnp.asarray(ko.beta)[out_edges]).sum()) == 0.0

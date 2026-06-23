@@ -12,7 +12,7 @@ import numpy as np
 from ..base import ComposedPrior, GRNSampler, Simulator
 from ..samplers import GroupedScaleFreeSampler
 from ..simulators.grn_paper import GrnPaperConfig, GrnPaperSimulator
-from ..simulators.sergio import SergioConfig, SergioSimulator
+from ..simulators.sergio import SergioConfig, SergioSimulator, make_params
 
 
 def build_sampler(r: float = 3.0, num_groups: int = 1, kappa: float = 5.0) -> GRNSampler:
@@ -35,37 +35,51 @@ def build_prior(simulator: str = "sergio", sampler_kwargs: dict | None = None, *
     ``mappfn`` is the cycle-tolerant SERGIO prior (any GRN, no required master
     regulators); ``sergio`` and ``grn_paper`` are the strict simulators.
     """
-    from ..priors import MapPfnPrior
+    from ..priors import MapPFNPrior
 
     sampler = build_sampler(**(sampler_kwargs or {}))
     if simulator == "mappfn":
-        return MapPfnPrior(SergioConfig(**cfg_kwargs), sampler=sampler)
+        return MapPFNPrior(SergioConfig(**cfg_kwargs), sampler=sampler)
     return ComposedPrior(sampler, build_simulator(simulator, **cfg_kwargs))
 
 
-def matched_sergio_networks(num_genes: int, num_cell_types: int, sampler: GRNSampler, cfg: SergioConfig, seed: int):
-    """Build a JAX :class:`SergioParams` and a structurally identical sergio_rs GRN.
+def matched_sergio_networks(
+    num_genes: int, num_cell_types: int, cfg: SergioConfig, seed: int, avg_regulators: float = 3.0
+):
+    """Build a random DAG and a matching JAX :class:`SergioParams` + sergio_rs GRN.
 
-    The sampler + SERGIO adapter produce the (acyclic) JAX network; the same final
-    edge list, decay rates and Hill coefficients are replayed into sergio_rs so
-    both implementations simulate the same topology. Returns
-    ``(jax_params, sergio_grn, mr_profile)``.
+    Edges only go from a lower to a higher gene index, so the graph is acyclic and gene 0
+    is a master regulator -- exactly what strict SERGIO (and ``sergio_rs``) require, with no
+    host-side cycle breaking. The same edges, decay rates and Hill coefficients drive both
+    backends. Returns ``(jax_params, sergio_grn, mr_profile)``.
     """
     import sergio_rs
 
-    sim = SergioSimulator(cfg)
-    key = jax.random.PRNGKey(seed)
-    grn = sampler.sample(jax.random.fold_in(key, 1), num_genes)
-    params = sim.build_params(grn, jax.random.fold_in(key, 2))
+    rng = np.random.default_rng(seed)
+    # Each gene j >= 1 draws a few regulators from {0..j-1}; gene 0 is the source (MR).
+    reg, tar = [], []
+    for j in range(1, num_genes):
+        n_reg = min(j, 1 + rng.poisson(max(avg_regulators - 1.0, 0.0)))
+        for r in rng.choice(j, size=n_reg, replace=False):
+            reg.append(int(r))
+            tar.append(j)
+    reg = np.asarray(reg)
+    tar = np.asarray(tar)
 
-    reg = np.asarray(params.reg_idx)
-    tar = np.asarray(params.tar_idx)
-    k = np.asarray(params.k)
-    hill_n = np.asarray(params.hill_n)
-    decay = np.asarray(params.decay)
+    decay = rng.uniform(0.5, 1.0, num_genes)
+    k = rng.uniform(1.0, 5.0, len(reg))
+    hill_n = rng.uniform(1.5, 2.5, len(reg))
+    is_mr = np.bincount(tar, minlength=num_genes) == 0
+    prod_rates = np.where(
+        rng.random((num_genes, num_cell_types)) < 0.5,
+        rng.uniform(3.0, 5.0, (num_genes, num_cell_types)),
+        rng.uniform(0.5, 2.0, (num_genes, num_cell_types)),
+    )
+    prod_rates = prod_rates * is_mr[:, None]  # only master regulators carry basal drive
+    params = make_params(reg, tar, k, hill_n, decay, prod_rates)
 
     rs_grn = sergio_rs.GRN()
-    for (r, t), kk, nn in zip(zip(reg.tolist(), tar.tolist()), k, hill_n):
+    for r, t, kk, nn in zip(reg.tolist(), tar.tolist(), k, hill_n):
         rs_grn.add_interaction(
             reg=sergio_rs.Gene(f"GENE{r:05d}", float(decay[r])),
             tar=sergio_rs.Gene(f"GENE{t:05d}", float(decay[t])),
