@@ -65,18 +65,22 @@ def test_padding_is_inert():
 
 
 def test_jittable():
-    fn = jax.jit(lambda key: grouped_scale_free_edges(
-        key, 50, alpha=1e-6, beta=2 / 3 - 1e-6, gamma=1 / 3, delta_in=100.0, delta_out=1.0, k=2, kappa=10.0
-    ))
+    fn = jax.jit(
+        lambda key: grouped_scale_free_edges(
+            key, 50, alpha=1e-6, beta=2 / 3 - 1e-6, gamma=1 / 3, delta_in=100.0, delta_out=1.0, k=2, kappa=10.0
+        )
+    )
     s, t, valid, groups = jax.block_until_ready(fn(jax.random.PRNGKey(0)))
     assert s.shape == t.shape == valid.shape
     assert groups.shape == (50,)
 
 
 def test_vmap_over_keys():
-    fn = jax.vmap(lambda key: grouped_scale_free_edges(
-        key, 40, alpha=1e-6, beta=3 / 4 - 1e-6, gamma=1 / 4, delta_in=10.0, delta_out=1.0, k=3, kappa=5.0
-    ))
+    fn = jax.vmap(
+        lambda key: grouped_scale_free_edges(
+            key, 40, alpha=1e-6, beta=3 / 4 - 1e-6, gamma=1 / 4, delta_in=10.0, delta_out=1.0, k=3, kappa=5.0
+        )
+    )
     keys = jax.random.split(jax.random.PRNGKey(1), 8)
     s, t, valid, groups = fn(keys)
     assert s.shape[0] == 8 and groups.shape == (8, 40)
@@ -90,8 +94,16 @@ def test_vmap_over_traced_hyperparams():
 
     def one(key, gamma, kappa):
         return grouped_scale_free_edges(
-            key, n, alpha=1e-6, beta=1.0 - 1e-6 - gamma, gamma=gamma,
-            delta_in=50.0, delta_out=1.0, k=k, kappa=kappa, max_edges=max_edges,
+            key,
+            n,
+            alpha=1e-6,
+            beta=1.0 - 1e-6 - gamma,
+            gamma=gamma,
+            delta_in=50.0,
+            delta_out=1.0,
+            k=k,
+            kappa=kappa,
+            max_edges=max_edges,
         )
 
     b = 6
@@ -107,6 +119,6 @@ def test_traced_hyperparams_require_explicit_max_edges():
     import pytest
 
     with pytest.raises(ValueError, match="max_edges"):
-        jax.jit(lambda gamma: grouped_scale_free_edges(jax.random.PRNGKey(0), 30, gamma=gamma, beta=1.0 - gamma, alpha=0.0))(
-            jnp.float32(0.3)
-        )
+        jax.jit(
+            lambda gamma: grouped_scale_free_edges(jax.random.PRNGKey(0), 30, gamma=gamma, beta=1.0 - gamma, alpha=0.0)
+        )(jnp.float32(0.3))

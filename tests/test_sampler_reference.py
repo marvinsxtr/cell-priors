@@ -20,7 +20,15 @@ from reference.grouped_scale_free_original import grouped_scale_free_edges_refer
 from cell_priors.samplers.grouped_scale_free import edges_to_grn
 
 # beta-heavy regime so the reference produces plenty of parallel edges.
-_PARAMS = {"alpha": 1e-6, "beta": 1.0 - 1e-6 - 0.4, "gamma": 0.4, "delta_in": 50.0, "delta_out": 1.0, "k": 2, "kappa": 8.0}
+_PARAMS = {
+    "alpha": 1e-6,
+    "beta": 1.0 - 1e-6 - 0.4,
+    "gamma": 0.4,
+    "delta_in": 50.0,
+    "delta_out": 1.0,
+    "k": 2,
+    "kappa": 8.0,
+}
 
 
 def _adjacency(reg: np.ndarray, tar: np.ndarray, weight: np.ndarray, n: int) -> np.ndarray:
