@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from cell_priors import MapPfnPrior
+from cell_priors import MapPFNPrior
 from cell_priors.base import GRN, InterventionKind
 from cell_priors.samplers import GroupedScaleFreeSampler
 from cell_priors.simulators.sergio import SergioConfig, SergioSimulator
@@ -21,15 +21,17 @@ def _cyclic_grn(num_genes=3):
 
 def _prior(num_cells=30):
     cfg = SergioConfig(num_cells=num_cells, num_cell_types=1, safety_iter=80, scale_iter=3)
-    return MapPfnPrior(cfg, sampler=GroupedScaleFreeSampler(r=3.0, num_groups=2))
+    return MapPFNPrior(cfg, sampler=GroupedScaleFreeSampler(r=3.0, num_groups=2))
 
 
 def test_keeps_cycles_no_dagify():
     prior = _prior()
     grn = prior.sampler.sample(jax.random.PRNGKey(0), num_genes=40)
-    # The MapPFN adapter does not remove edges (no DAGification): same edge count.
+    # Cycle-tolerant kinetics keep the GRN as drawn (no DAGification): the fixed-size
+    # edge buffer is passed through unchanged, and every real edge stays active.
     params = prior.simulator.build_params(grn, jax.random.PRNGKey(1))
     assert int(params.num_edges) == int(grn.num_edges)
+    assert int((np.asarray(params.edge_mask) > 0).sum()) == int((np.asarray(grn.weight) > 0).sum())
 
 
 def test_mr_less_cycle_is_driven():

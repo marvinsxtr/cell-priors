@@ -9,7 +9,7 @@ from .samplers import GroupedScaleFreeSampler
 from .simulators.sergio import SergioConfig, SergioSimulator
 
 
-class MapPfnPrior(ComposedPrior):
+class MapPFNPrior(ComposedPrior):
     """A less-opinionated prior: grouped scale-free sampler x cycle-tolerant SERGIO.
 
     Standard SERGIO is opinionated about its input GRN: it requires a DAG (cycles
@@ -20,8 +20,10 @@ class MapPfnPrior(ComposedPrior):
     * every gene gets its own basal production rate (``require_mrs=False``), so a
       network with no source nodes is still driven.
 
-    It keeps SERGIO's Hill-function production and stochastic dynamics, so it sits
-    between the strict SERGIO prior and the grn-paper sigmoid model.
+    Both the sampler and the SERGIO kinetics build are pure JAX, so the whole prior --
+    structure sampling, kinetics and simulation -- runs inside a single ``jit``/``vmap``
+    with no host round-trip. It keeps SERGIO's Hill-function production and stochastic
+    dynamics, so it sits between the strict SERGIO prior and the grn-paper sigmoid model.
     """
 
     def __init__(

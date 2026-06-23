@@ -120,3 +120,58 @@ def make_params(
         prod_rates=jnp.asarray(prod_rates, dtype=dtype),
     )
     return recompute_mr_mask(p)
+
+
+def build_sergio_params(
+    grn,
+    key: Array,
+    num_cell_types: int = 1,
+    decay_range: tuple[float, float] = (0.5, 1.0),
+    hill_n_range: tuple[float, float] = (1.5, 2.5),
+    interaction_k_range: tuple[float, float] = (1.0, 5.0),
+    repression_prob: float = 0.0,
+    mr_low_range: tuple[float, float] = (0.5, 2.0),
+    mr_high_range: tuple[float, float] = (3.0, 5.0),
+    dtype=jnp.float32,
+) -> SergioParams:
+    """Sample SERGIO kinetics for a :class:`GRN` as a pure JAX function.
+
+    Keeps the graph exactly as drawn (no cycle removal) and gives every gene its own
+    basal production rate, so any structure -- cyclic, source-free -- is driven. A unique
+    edge is active where the GRN's ``weight`` is positive (one row per ``reg -> tar`` pair,
+    each with its own sampled interaction); duplicate / padding / self-loop slots are
+    masked out. (SERGIO has no multiplicity notion, so the count itself is unused here.)
+
+    Because it only uses ``jax.random`` and fixed shapes, this composes with the
+    sampler and simulator inside a single ``jit``/``vmap``-ed graph.
+    """
+    e = grn.num_edges
+    g = grn.num_genes
+    c = num_cell_types
+    k_hill, k_mag, k_sign, k_decay, k_hi, k_lo, k_mix = jax.random.split(key, 7)
+
+    def _u(k, shape, rng):
+        return jax.random.uniform(k, shape, minval=rng[0], maxval=rng[1])
+
+    hill_n = _u(k_hill, (e,), hill_n_range)
+    k_abs = _u(k_mag, (e,), interaction_k_range)
+    sign = jnp.where(jax.random.uniform(k_sign, (e,)) < repression_prob, -1.0, 1.0)
+    decay = _u(k_decay, (g,), decay_range)
+    high = _u(k_hi, (g, c), mr_high_range)
+    low = _u(k_lo, (g, c), mr_low_range)
+    prod_rates = jnp.where(jax.random.uniform(k_mix, (g, c)) < 0.5, high, low)
+
+    p = SergioParams(
+        reg_idx=grn.reg_idx.astype(jnp.int32),
+        tar_idx=grn.tar_idx.astype(jnp.int32),
+        k=(k_abs * sign).astype(dtype),
+        hill_n=hill_n.astype(dtype),
+        h=jnp.zeros(e, dtype=dtype),
+        edge_mask=(grn.weight > 0).astype(dtype),
+        decay=decay.astype(dtype),
+        mr_mask=jnp.zeros(g, dtype=dtype),
+        prod_scale=jnp.ones(g, dtype=dtype),
+        ko_mask=jnp.zeros(g, dtype=dtype),
+        prod_rates=prod_rates.astype(dtype),
+    )
+    return recompute_mr_mask(p)

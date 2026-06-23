@@ -18,12 +18,13 @@ Features include:
 
 ![SERGIO prior throughput across backends](assets/throughput.png)
 
-Generating fresh SERGIO networks on the GPU (batched, fused into the training graph)
-reaches **~2,000–3,400 networks/s** — roughly **20–60× faster than the same JAX core on
-CPU**, **50–300× the Rust `sergio_rs` reference**, and faster than even *loading*
-precomputed data from disk through a PyTorch `DataLoader`. Same model, four backends;
-measured on a Lenovo ThinkStation (NVIDIA GB10). Reproduce with
-`python -m cell_priors.eval.throughput` (see [Benchmarks](#benchmarks--comparison-scripts-not-notebooks)).
+Generating fresh SERGIO networks **end to end** on the GPU — sampling the GRN structure
+*and* simulating it, batched in one graph with no precomputed pool — reaches
+**~770–2,900 networks/s**: roughly **50–70× the same prior on CPU**, **~60–110× the Rust
+`sergio_rs` reference** (which only simulates a given network), and several× faster than
+even *loading* precomputed data from disk through a PyTorch `DataLoader`. Measured on a
+Lenovo ThinkStation (NVIDIA GB10). Reproduce with `python -m cell_priors.eval.throughput`
+(see [Benchmarks](#benchmarks--comparison-scripts-not-notebooks)).
 
 Currently included:
 
@@ -35,7 +36,7 @@ Currently included:
 
 Plus a preconfigured prior:
 
-- **`MapPfnPrior`** — grouped scale-free sampler × a *cycle-tolerant* SERGIO. Less
+- **`MapPFNPrior`** — grouped scale-free sampler × a *cycle-tolerant* SERGIO. Less
   opinionated than the strict SERGIO prior: it simulates any sampled GRN exactly as drawn
   (cycles kept) and gives every gene a basal production rate, so it does **not** require a
   DAG or master regulators.
@@ -50,7 +51,7 @@ Plus a preconfigured prior:
 
 ```python
 import jax
-from cell_priors import ComposedPrior, InterventionKind, MapPfnPrior
+from cell_priors import ComposedPrior, InterventionKind, MapPFNPrior
 from cell_priors.samplers import GroupedScaleFreeSampler
 from cell_priors.simulators.sergio import SergioSimulator, SergioConfig
 from cell_priors.simulators.grn_paper import GrnPaperSimulator, GrnPaperConfig
@@ -60,7 +61,7 @@ sampler = GroupedScaleFreeSampler(r=4.0, num_groups=3, kappa=10.0)
 # Same sampler, different simulators — interchangeable priors:
 sergio = ComposedPrior(sampler, SergioSimulator(SergioConfig(num_cells=200, num_cell_types=2)))
 grnp   = ComposedPrior(sampler, GrnPaperSimulator(GrnPaperConfig(num_cells=200)))
-mappfn = MapPfnPrior(SergioConfig(num_cells=200), sampler=sampler)  # cycle-tolerant SERGIO
+mappfn = MapPFNPrior(SergioConfig(num_cells=200), sampler=sampler)  # cycle-tolerant SERGIO
 
 params = sergio.sample_params(jax.random.PRNGKey(0), num_genes=100)   # sample GRN + kinetics
 obs    = sergio.observational(params, jax.random.PRNGKey(1))          # (cells, genes)
@@ -88,8 +89,9 @@ def step(model, key):
 `cell_priors.base` defines the contract (see also `ComposedPrior`, which wires them
 together):
 
-- **`GRN`** — a sampled structure: sparse directed edges `(reg, tar)` with integer
-  `weight` (multiplicity) and a per-gene `group` label. Simulator-agnostic.
+- **`GRN`** — a sampled structure: a fixed-size directed edge buffer `(reg, tar)` with a
+  per-edge `weight` (the pair's multiplicity on one representative row, `0` for duplicate /
+  self-loop / padding slots) and a per-gene `group` label. Simulator-agnostic.
 - **`GRNSampler.sample(key, num_genes) -> GRN`**.
 - **`Simulator`** — `build_params(grn, key)` attaches kinetic parameters; `simulate(params,
   key)` integrates the expression model; `intervene(params, genes, kind, strength)` edits
@@ -102,8 +104,9 @@ together):
 `grouped_scale_free_graph`: Bollobás-style directed preferential attachment with three
 moves (`alpha`/`beta`/`gamma`) plus `k` modules and within-group attachment (`kappa`).
 Parametrize by `r` (avg. regulators per gene). Preferential attachment is inherently
-sequential, so structure growth is a host-driven loop using `jax.random`; the heavy
-numerics live in the simulators, which are fully `jit`/`vmap`-able.
+sequential, but it is expressed as a single `lax.scan` over fixed-size degree buffers
+(edges in a padded buffer with a validity mask), so the sampler is fully `jit`/`vmap`-able
+like the simulators — the whole prior samples and simulates on device with no host loop.
 
 ### Simulators
 
@@ -117,11 +120,12 @@ basal rate per cell type. Engineered for the prior+model loop:
   half-response and steady-state estimate (a sequential pass over topological levels) is
   recast as a `lax.scan` fixed point that converges to the *exact* same values on a DAG.
 - **One `lax.scan`** for the whole SDE; the trajectory is sampled with a gather.
-- A sampled `GRN` is cyclic in general, so the SERGIO adapter breaks cycles (drops the
-  weakest edge per cycle) before simulating — *unless* you opt into the cycle-tolerant
+- A sampled `GRN` is cyclic in general. Strict SERGIO breaks cycles on the host (drops the
+  weakest edge per cycle) so its topological steady state applies. The **cycle-tolerant**
   mode (`SergioConfig(require_mrs=False)` + `SergioSimulator(..., acyclic=False)`, as used
-  by `MapPfnPrior`), which keeps every edge and gives every gene a basal production rate
-  so any GRN — cyclic, with no source nodes — is still driven.
+  by `MapPFNPrior`) instead keeps every edge and gives every gene a basal production rate,
+  so any GRN — cyclic, with no source nodes — is still driven. Its kinetics build is pure
+  JAX, so structure sampling, kinetics and simulation run in one `jit`/`vmap` on device.
 
 **`GrnPaperSimulator`** — the grn-paper model: a sigmoid-link SDE on a dense signed
 interaction matrix `β` with per-gene basal `α` and degradation `l`,
@@ -145,7 +149,7 @@ trajectory).
   `simulate_rna` (deterministic `s = 0`) to float precision.
 
 ```bash
-uv run pytest          # 29 tests, incl. sergio_rs + grn-paper parity
+uv run pytest          # 42 tests, incl. sergio_rs + grn-paper parity
 ```
 
 ### Hard knockouts vs. soft CRISPRi knockdowns

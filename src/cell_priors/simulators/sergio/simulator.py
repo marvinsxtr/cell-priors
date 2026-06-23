@@ -7,9 +7,8 @@ from jax import Array
 
 from ...base import GRN, InterventionKind, Simulator
 from . import core, interventions
-from .adapter import grn_to_sergio_params
 from .noise import NoiseProfile, add_technical_noise, resolve_profile
-from .params import SergioConfig, SergioParams
+from .params import SergioConfig, SergioParams, build_sergio_params
 
 
 class SergioSimulator(Simulator):
@@ -18,14 +17,27 @@ class SergioSimulator(Simulator):
     ``cfg`` holds the static integration hyperparameters (cells, cell types,
     iterations, dt, noise); the remaining keyword arguments configure the kinetic
     parameters drawn when adapting a :class:`GRN`.
+
+    ``acyclic`` selects how a sampled :class:`GRN` becomes parameters. ``True`` (default,
+    strict SERGIO) removes cycles on the host so the topological steady state and master
+    regulators apply. ``False`` keeps the graph as drawn and gives every gene a basal
+    rate (cycle-tolerant), via a pure-JAX builder -- so structure sampling, kinetics and
+    simulation compose inside a single ``jit``/``vmap``. Pair ``acyclic=False`` with
+    ``SergioConfig(require_mrs=False)``.
     """
 
-    def __init__(self, cfg: SergioConfig | None = None, **kinetics: object) -> None:
+    def __init__(self, cfg: SergioConfig | None = None, acyclic: bool = True, **kinetics: object) -> None:
         self.cfg = cfg or SergioConfig()
+        self.acyclic = acyclic
         self.kinetics = kinetics
 
     def build_params(self, grn: GRN, key: Array) -> SergioParams:
-        return grn_to_sergio_params(grn, key, num_cell_types=self.cfg.num_cell_types, **self.kinetics)
+        c = self.cfg.num_cell_types
+        if self.acyclic:
+            from .adapter import grn_to_sergio_params
+
+            return grn_to_sergio_params(grn, key, num_cell_types=c, acyclic=True, **self.kinetics)
+        return build_sergio_params(grn, key, num_cell_types=c, **self.kinetics)
 
     def simulate(
         self,

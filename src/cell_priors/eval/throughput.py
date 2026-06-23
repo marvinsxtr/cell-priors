@@ -1,16 +1,18 @@
 """Throughput benchmark + advertising plot: how fast can we feed the model?
 
-Compares four ways of delivering one SERGIO network's expression matrix
+Compares ways of delivering one SERGIO network's expression matrix
 (``(num_cells, num_genes)``) to a training loop, as **networks per second**:
 
 * ``sergio_rs``  -- the Rust reference simulator (single process);
-* ``jax_cpu``    -- this library's JAX SERGIO core, vmapped, on CPU;
-* ``jax_gpu``    -- the same JAX core, vmapped, on GPU;
+* ``jax_cpu``    -- the end-to-end JAX prior (sample structure + kinetics + simulate),
+  vmapped, on CPU;
+* ``jax_gpu``    -- the same end-to-end JAX prior, vmapped, on GPU;
 * ``torch_h5``   -- load precomputed data from an ``.h5ad`` via a PyTorch
   ``DataLoader`` (the generate-to-disk-then-load pipeline).
 
-The JAX variants run the *same* algorithm as ``sergio_rs`` (validated to match
-numerically), so the only difference is the backend -- a fair comparison.
+The JAX variants generate each network from scratch on device -- structure sampling
+and the SERGIO simulation (validated to match ``sergio_rs`` numerically) run in one
+``jit``/``vmap`` with no host round-trip and no precomputed network pool.
 
 Usage (CPU and GPU need separate processes, since JAX fixes the platform at
 startup)::
@@ -33,8 +35,7 @@ import click
 import jax
 
 from ..simulators.sergio import SergioConfig
-from ..simulators.sergio.core import simulate as sergio_simulate
-from ._common import build_sampler, matched_sergio_networks
+from ._common import matched_sergio_networks
 
 CELLS = 128
 BATCH = 64
@@ -54,11 +55,22 @@ def _best(fn, *args, repeats=REPEATS):
 
 
 def _bench_jax(ng: int) -> float:
-    """Networks/sec for the JAX SERGIO core, vmapped over a batch."""
-    cfg = SergioConfig(num_cells=CELLS, num_cell_types=1)
-    params, _, _ = matched_sergio_networks(ng, 1, build_sampler(), cfg, seed=0)
+    """Networks/sec for the end-to-end JAX prior, vmapped over a batch.
+
+    Each batch element samples a *distinct* network (structure + kinetics) and
+    simulates it, all on device in one graph -- the no-pool, no-disk workflow.
+    """
+    from ..priors import MapPFNPrior
+
+    prior = MapPFNPrior(SergioConfig(num_cells=CELLS, num_cell_types=1))
+
+    def one(k):
+        k_struct, k_sim = jax.random.split(k)
+        params = prior.sample_params(k_struct, num_genes=ng)
+        return prior.observational(params, k_sim)
+
     keys = jax.random.split(jax.random.PRNGKey(0), BATCH)
-    fn = jax.jit(jax.vmap(lambda k: sergio_simulate(params, k, cfg)))
+    fn = jax.jit(jax.vmap(one))
     return BATCH / _best(fn, keys)
 
 
@@ -67,7 +79,7 @@ def _bench_sergio_rs(ng: int) -> float:
     import sergio_rs
 
     cfg = SergioConfig(num_cells=CELLS, num_cell_types=1)
-    _, grn, mr_profile = matched_sergio_networks(ng, 1, build_sampler(), cfg, seed=0)
+    _, grn, mr_profile = matched_sergio_networks(ng, 1, cfg, seed=0)
 
     def run():
         sim = sergio_rs.Sim(
@@ -101,10 +113,10 @@ def _bench_torch_h5(ng: int, tmpdir: Path) -> float | None:
     import numpy as np
 
     from ..io import generate_anndata
-    from ..priors import MapPfnPrior
+    from ..priors import MapPFNPrior
 
     # Pre-generate a dataset of networks and write it to disk.
-    prior = MapPfnPrior(SergioConfig(num_cells=CELLS, num_cell_types=1), sampler=build_sampler())
+    prior = MapPFNPrior(SergioConfig(num_cells=CELLS, num_cell_types=1))
     adata = generate_anndata(
         prior, jax.random.PRNGKey(0), num_contexts=4, num_genes=ng, treatments=list(range(8)), add_noise=True
     )
@@ -196,8 +208,8 @@ def plot(data, out, device):
     series = [
         ("torch_h5", "h5 + PyTorch DataLoader (disk)", "#9aa0a6"),
         ("sergio_rs", "sergio_rs (Rust, CPU)", "#e8710a"),
-        ("jax_cpu", "JAX SERGIO (CPU)", "#1a73e8"),
-        ("jax_gpu", "JAX SERGIO (GPU)", "#34a853"),
+        ("jax_cpu", "JAX prior end-to-end (CPU)", "#1a73e8"),
+        ("jax_gpu", "JAX prior end-to-end (GPU)", "#34a853"),
     ]
     series = [(k, lbl, c) for k, lbl, c in series if k in results]
 
@@ -221,7 +233,7 @@ def plot(data, out, device):
     ax.set_xticklabels([str(g) for g in genes])
     ax.set_xlabel("genes per network")
     ax.set_ylabel("networks / second  (higher is better, log scale)")
-    title = "SERGIO prior throughput: same model, four backends"
+    title = "SERGIO prior throughput: on-device end-to-end generation vs. Rust / disk"
     if device:
         title += f"\n{device}  ·  {results['_meta']['cells']} cells/net, batch {results['_meta']['batch']}"
     ax.set_title(title)
