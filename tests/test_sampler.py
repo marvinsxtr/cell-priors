@@ -81,3 +81,32 @@ def test_vmap_over_keys():
     s, t, valid, groups = fn(keys)
     assert s.shape[0] == 8 and groups.shape == (8, 40)
     assert jnp.all(valid.sum(axis=1) > 0)  # every sampled graph has real edges
+
+
+def test_vmap_over_traced_hyperparams():
+    # Per-network structure hyperparameters (gamma, kappa) may be traced as long as
+    # n / k / max_edges stay static and an explicit max_edges is passed.
+    n, k, max_edges = 40, 2, 220
+
+    def one(key, gamma, kappa):
+        return grouped_scale_free_edges(
+            key, n, alpha=1e-6, beta=1.0 - 1e-6 - gamma, gamma=gamma,
+            delta_in=50.0, delta_out=1.0, k=k, kappa=kappa, max_edges=max_edges,
+        )
+
+    b = 6
+    keys = jax.random.split(jax.random.PRNGKey(0), b)
+    gammas = jnp.linspace(0.2, 0.45, b)
+    kappas = jnp.linspace(1.0, 12.0, b)
+    s, t, valid, groups = jax.jit(jax.vmap(one))(keys, gammas, kappas)
+    assert s.shape == (b, max_edges) and groups.shape == (b, n)
+    assert jnp.all(valid.sum(axis=1) > 0)
+
+
+def test_traced_hyperparams_require_explicit_max_edges():
+    import pytest
+
+    with pytest.raises(ValueError, match="max_edges"):
+        jax.jit(lambda gamma: grouped_scale_free_edges(jax.random.PRNGKey(0), 30, gamma=gamma, beta=1.0 - gamma, alpha=0.0))(
+            jnp.float32(0.3)
+        )

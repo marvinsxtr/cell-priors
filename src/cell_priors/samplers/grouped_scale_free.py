@@ -76,17 +76,28 @@ def grouped_scale_free_edges(
     ``(n,)`` module label per node. ``n`` and ``k`` are static (they set shapes and the
     seed grouping). Endpoint selection uses ``categorical`` over log attachment scores,
     the same distribution as the reference's ``choice(p=...)``.
+
+    ``alpha``/``beta``/``gamma``/``delta_*``/``kappa`` may be **traced** (so the whole
+    thing can be ``vmap``-ed over per-network structure hyperparameters), as long as
+    ``n``/``k`` stay static and an explicit ``max_edges`` is supplied -- the upper bound
+    on the edge count must be a Python int, since it sets the output shape.
     """
-    if abs(alpha + beta + gamma - 1.0) >= 1e-9:
-        raise ValueError("alpha + beta + gamma must equal 1.")
-    for name, val in (("alpha", alpha), ("beta", beta), ("gamma", gamma),
-                      ("delta_in", delta_in), ("delta_out", delta_out), ("kappa", kappa)):
-        if val < 0:
-            raise ValueError(f"{name} must be >= 0.")
+    floats = (alpha, beta, gamma, delta_in, delta_out, kappa)
+    concrete = all(isinstance(v, (int, float)) for v in floats)
+    if concrete:
+        if abs(alpha + beta + gamma - 1.0) >= 1e-9:
+            raise ValueError("alpha + beta + gamma must equal 1.")
+        for name, val in zip(("alpha", "beta", "gamma", "delta_in", "delta_out", "kappa"), floats):
+            if val < 0:
+                raise ValueError(f"{name} must be >= 0.")
     if n < 3:
         raise ValueError("num_genes must be >= 3 (the seed is a 3-cycle).")
     k = max(int(k), 1)
-    max_edges = default_max_edges(n, alpha, gamma) if max_edges is None else int(max_edges)
+    if max_edges is None:
+        if not concrete:
+            raise ValueError("pass an explicit max_edges when alpha/gamma are traced (it sets the output shape).")
+        max_edges = default_max_edges(n, alpha, gamma)
+    max_edges = int(max_edges)
     if max_edges < n:
         raise ValueError("max_edges must be >= num_genes.")
 
