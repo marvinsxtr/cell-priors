@@ -129,7 +129,7 @@ def build_sergio_params(
     decay_range: tuple[float, float] = (0.5, 1.0),
     hill_n_range: tuple[float, float] = (1.5, 2.5),
     interaction_k_range: tuple[float, float] = (1.0, 5.0),
-    repression_prob: float = 0.0,
+    repression_prob_range: tuple[float, float] = (0.0, 0.5),
     mr_low_range: tuple[float, float] = (0.5, 2.0),
     mr_high_range: tuple[float, float] = (3.0, 5.0),
     dtype=jnp.float32,
@@ -148,13 +148,16 @@ def build_sergio_params(
     e = grn.num_edges
     g = grn.num_genes
     c = num_cell_types
-    k_hill, k_mag, k_sign, k_decay, k_hi, k_lo, k_mix = jax.random.split(key, 7)
+    k_hill, k_mag, k_sign, k_rep, k_decay, k_hi, k_lo, k_mix = jax.random.split(key, 8)
 
     def _u(k, shape, rng):
         return jax.random.uniform(k, shape, minval=rng[0], maxval=rng[1])
 
     hill_n = _u(k_hill, (e,), hill_n_range)
     k_abs = _u(k_mag, (e,), interaction_k_range)
+    # One repression probability per network (drawn from the range), then each edge is
+    # repressing (signed -1) with that probability -- mirrors how decay/hill/k are ranged.
+    repression_prob = _u(k_rep, (), repression_prob_range)
     sign = jnp.where(jax.random.uniform(k_sign, (e,)) < repression_prob, -1.0, 1.0)
     decay = _u(k_decay, (g,), decay_range)
     high = _u(k_hi, (g, c), mr_high_range)

@@ -44,7 +44,7 @@ def grn_to_sergio_params(
     decay_range: tuple[float, float] = (0.5, 1.0),
     hill_n_range: tuple[float, float] = (1.5, 2.5),
     interaction_k_range: tuple[float, float] = (1.0, 5.0),
-    repression_prob: float = 0.0,
+    repression_prob_range: tuple[float, float] = (0.0, 0.5),
     mr_low_range: tuple[float, float] = (0.5, 2.0),
     mr_high_range: tuple[float, float] = (3.0, 5.0),
     acyclic: bool = True,
@@ -72,6 +72,8 @@ def grn_to_sergio_params(
 
     hill_n = rng.uniform(*hill_n_range, size=e)
     k_mag = rng.uniform(*interaction_k_range, size=e)
+    # One repression probability per network, then sign each edge accordingly.
+    repression_prob = rng.uniform(*repression_prob_range)
     sign = np.where(rng.random(e) < repression_prob, -1.0, 1.0)
     k = k_mag * sign
 
