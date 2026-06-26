@@ -47,13 +47,13 @@ def default_max_edges(num_genes: int, alpha: float, gamma: float) -> int:
     return int(3 + math.ceil(mean + 8.0 * std) + 16)
 
 
-def _seed_groups(k: int) -> list[int]:
-    """Group labels of the 3-cycle seed nodes (matches the reference seeding)."""
-    if k == 1:
-        return [0, 0, 0]
-    if k == 2:
-        return [0, 1, 0]
-    return [0, 1, 2]
+def _seed_groups(k):
+    """Group labels of the 3-cycle seed nodes (matches the reference seeding).
+
+    Branch-free so ``k`` may be a traced value: ``[0, 0, 0]`` for ``k==1``, ``[0, 1, 0]``
+    for ``k==2`` and ``[0, 1, 2]`` for ``k>=3``.
+    """
+    return jnp.array([0, jnp.minimum(1, k - 1), jnp.where(k >= 3, 2, 0)], dtype=jnp.int32)
 
 
 def grouped_scale_free_edges(
@@ -92,7 +92,7 @@ def grouped_scale_free_edges(
                 raise ValueError(f"{name} must be >= 0.")
     if n < 3:
         raise ValueError("num_genes must be >= 3 (the seed is a 3-cycle).")
-    k = max(int(k), 1)
+    k = jnp.maximum(jnp.asarray(k), 1)  # may be traced (it sets no shape: only seed labels + the randint range)
     if max_edges is None:
         if not concrete:
             raise ValueError("pass an explicit max_edges when alpha/gamma are traced (it sets the output shape).")
@@ -106,7 +106,7 @@ def grouped_scale_free_edges(
 
     d_in0 = jnp.zeros(n, jnp.int32).at[seed_nodes].set(1)
     d_out0 = jnp.zeros(n, jnp.int32).at[seed_nodes].set(1)
-    group0 = jnp.full(n, -1, jnp.int32).at[seed_nodes].set(jnp.asarray(_seed_groups(k), jnp.int32))
+    group0 = jnp.full(n, -1, jnp.int32).at[seed_nodes].set(_seed_groups(k))
     cur0 = jnp.int32(3)
 
     def _pick(pick_key: Array, scores: Array, valid: Array) -> Array:
