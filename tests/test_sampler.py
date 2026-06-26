@@ -115,6 +115,34 @@ def test_vmap_over_traced_hyperparams():
     assert jnp.all(valid.sum(axis=1) > 0)
 
 
+def test_vmap_over_traced_num_groups():
+    # num_groups (k) may also be traced -- it sets no array shape, only the seed grouping
+    # and the categorical range -- so a prior can vary the module count per network.
+    n, max_edges = 50, 250
+    alpha, gamma = 1e-6, 1.0 / 3.0
+
+    def one(key, k):
+        _, _, _, groups = grouped_scale_free_edges(
+            key,
+            n,
+            alpha=alpha,
+            beta=1.0 - alpha - gamma,
+            gamma=gamma,
+            delta_in=50.0,
+            delta_out=1.0,
+            k=k,
+            kappa=10.0,
+            max_edges=max_edges,
+        )
+        return groups
+
+    ks = jnp.array([1, 2, 3, 4])
+    keys = jax.random.split(jax.random.PRNGKey(0), 4)
+    groups = jax.jit(jax.vmap(one))(keys, ks)
+    for i, k in enumerate([1, 2, 3, 4]):
+        assert len(np.unique(np.asarray(groups[i]))) == k  # exactly k modules present
+
+
 def test_traced_hyperparams_require_explicit_max_edges():
     import pytest
 
