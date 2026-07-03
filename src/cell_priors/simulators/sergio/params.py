@@ -70,6 +70,7 @@ class SergioConfig:
     noise_s: float = 1.0
     init_iters: int | None = None  # steady-state fixed-point iterations; None -> num_genes
     require_mrs: bool = True  # False -> basal production for every gene (cycle-tolerant)
+    regulated_basal_scale: float = 1.0  # basal multiplier for non-master genes (permissive mode)
 
     @property
     def max_iter(self) -> int:
