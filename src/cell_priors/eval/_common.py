@@ -11,6 +11,7 @@ import numpy as np
 
 from ..base import ComposedPrior, GRNSampler, Simulator
 from ..samplers import GroupedScaleFreeSampler
+from ..simulators.boolode import BoolodeConfig, BoolodeSimulator
 from ..simulators.grn_paper import GrnPaperConfig, GrnPaperSimulator
 from ..simulators.sergio import SergioConfig, SergioSimulator, make_params
 
@@ -26,7 +27,9 @@ def build_simulator(name: str, **cfg_kwargs: Any) -> Simulator:
         return SergioSimulator(SergioConfig(**cfg_kwargs))
     if name == "grn_paper":
         return GrnPaperSimulator(GrnPaperConfig(**cfg_kwargs))
-    raise ValueError(f"Unknown simulator '{name}'. Available: sergio, grn_paper")
+    if name == "boolode":
+        return BoolodeSimulator(BoolodeConfig(**cfg_kwargs))
+    raise ValueError(f"Unknown simulator '{name}'. Available: sergio, grn_paper, boolode")
 
 
 def build_prior(simulator: str = "sergio", sampler_kwargs: dict | None = None, **cfg_kwargs: Any) -> ComposedPrior:
