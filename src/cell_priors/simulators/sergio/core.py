@@ -57,22 +57,43 @@ def _edge_production(x: Array, p: SergioParams) -> Array:
     return jax.ops.segment_sum(contrib, p.tar_idx, num_segments=g)
 
 
-def _production(x: Array, p: SergioParams, prod_rates: Array, require_mrs: bool = True) -> Array:
+def _production(
+    x: Array,
+    p: SergioParams,
+    prod_rates: Array,
+    require_mrs: bool = True,
+    regulated_basal_scale: float = 1.0,
+) -> Array:
     """Total production rate per gene.
 
     Standard SERGIO (``require_mrs=True``): master regulators use their basal
     ``prod_rates`` and every other gene is driven purely by its Hill inputs -- which
     requires a DAG with master-regulator sources to have any drive.
 
-    Permissive / cycle-tolerant mode (``require_mrs=False``): *every* gene gets its
-    basal ``prod_rates`` plus its Hill inputs, so any GRN -- cyclic, with no source
-    nodes -- is still driven. This is the basis of the MapPFN prior.
+    Permissive / cycle-tolerant mode (``require_mrs=False``): every gene gets its basal
+    ``prod_rates`` plus its Hill inputs, so any GRN -- cyclic, with no source nodes -- is
+    still driven. ``regulated_basal_scale`` scales the basal drive of *regulated*
+    (non-master) genes: 1.0 keeps the fully-permissive basal-dominated regime, while a
+    small value makes regulated genes regulation-dominated (so a knockout strongly and
+    specifically shifts its targets) while master regulators keep full basal -- a middle
+    ground between pure SERGIO and the permissive prior that stays cycle-tolerant.
+
+    Args:
+        x: Current concentration, ``(G, C)``.
+        p: Network parameters.
+        prod_rates: Basal production per gene and cell type, ``(G, C)``.
+        require_mrs: Restrict basal production to master regulators.
+        regulated_basal_scale: Basal multiplier for non-master genes (permissive mode).
+
+    Returns:
+        Non-negative production rate per gene and cell type, ``(G, C)``.
     """
     p_hill = _edge_production(x, p)
     if require_mrs:
         out = jnp.where(p.mr_mask[:, None] > 0, prod_rates, p_hill)
     else:
-        out = prod_rates + p_hill
+        basal_scale = jnp.where(p.mr_mask[:, None] > 0, 1.0, regulated_basal_scale)
+        out = prod_rates * basal_scale + p_hill
     out = out * p.prod_scale[:, None]
     return jnp.maximum(out, 0.0)
 
@@ -93,7 +114,7 @@ def init_steady_state(p: SergioParams, cfg: SergioConfig) -> tuple[SergioParams,
         ss, _h = carry
         h_new = jnp.mean(ss[p.reg_idx], axis=1)  # (E,) mean over cell types of regulator ss
         p_h = dataclasses.replace(p, h=h_new)
-        prod = _production(ss, p_h, p.prod_rates, cfg.require_mrs)
+        prod = _production(ss, p_h, p.prod_rates, cfg.require_mrs, cfg.regulated_basal_scale)
         ss_new = prod / decay
         return (ss_new, h_new), None
 
@@ -118,7 +139,7 @@ def simulate_trajectory(p: SergioParams, ss: Array, key: Array, cfg: SergioConfi
 
     def step(x, key_t):
         kp, kd = random.split(key_t)
-        prod = _production(x, p, p.prod_rates, cfg.require_mrs)
+        prod = _production(x, p, p.prod_rates, cfg.require_mrs, cfg.regulated_basal_scale)
         d = decay * x
         eps_p = random.normal(kp, x.shape)
         eps_d = random.normal(kd, x.shape)
