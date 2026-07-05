@@ -73,7 +73,7 @@ def _bench_rust(grn, mr_profile, cfg, repeats):
 
 
 @click.command()
-@click.option("--simulator", default="sergio", type=click.Choice(["sergio", "mappfn", "grn_paper"]))
+@click.option("--simulator", default="sergio", type=click.Choice(["sergio", "mappfn", "grn_paper", "boolode"]))
 @click.option("--genes", default="20,50,100", help="Comma-separated gene counts.")
 @click.option("--cells", default=200, help="Cells per cell type (sergio) / cells (grn_paper).")
 @click.option("--cell-types", default=1, help="Number of cell types (sergio only).")
@@ -85,10 +85,10 @@ def main(simulator, genes, cells, cell_types, batch, repeats, rust, seed):
     """Run the speed benchmark and print a comparison table."""
     gene_list = [int(g) for g in genes.split(",")]
     use_rust = rust and simulator == "sergio"
-    # The grn-paper prior builds its kinetics in pure JAX, so the whole prior (structure
-    # sampling + simulation) is timed end to end; the SERGIO kinetics adapter is host-side,
-    # so those JAX numbers are simulation only.
-    end_to_end = simulator == "grn_paper"
+    # The grn-paper and BoolODE priors build their kinetics in pure JAX, so the whole prior
+    # (structure sampling + simulation) is timed end to end; the SERGIO kinetics adapter is
+    # host-side, so those JAX numbers are simulation only.
+    end_to_end = simulator in ("grn_paper", "boolode")
     jax_mode = "sample+simulate (end to end)" if end_to_end else "simulate only"
     print(f"device={jax.devices()[0].platform}  simulator={simulator}  cells={cells}  batch={batch}  jax={jax_mode}")
     header = f"{'genes':>6} {'edges':>6} {'jax(ms)':>10} {'jax/net(ms)':>12}"
@@ -107,7 +107,12 @@ def main(simulator, genes, cells, cell_types, batch, repeats, rust, seed):
         else:
             prior = build_prior(simulator, num_cells=cells)
             params = prior.sample_params(jax.random.PRNGKey(seed), num_genes=ng)
-            edges = int((jax.numpy.asarray(params.beta) != 0).sum()) if end_to_end else int(params.num_edges)
+            if simulator == "grn_paper":
+                edges = int((jax.numpy.asarray(params.beta) != 0).sum())
+            elif simulator == "boolode":
+                edges = int((jax.numpy.asarray(params.edge_mask) > 0).sum())
+            else:
+                edges = int(params.num_edges)
             if end_to_end:
                 t_jax = _bench_jax_end_to_end(prior, ng, batch, repeats)
             else:
