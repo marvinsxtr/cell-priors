@@ -123,7 +123,9 @@ def init_steady_state(p: SergioParams, cfg: SergioConfig) -> tuple[SergioParams,
     return dataclasses.replace(p, h=h), ss
 
 
-def simulate_trajectory(p: SergioParams, ss: Array, key: Array, cfg: SergioConfig) -> Array:
+def simulate_trajectory(
+    p: SergioParams, ss: Array, key: Array, cfg: SergioConfig, noise_s: Array | float | None = None
+) -> Array:
     """Integrate the SERGIO SDE and return the full trajectory.
 
     Returns shape ``(max_iter + 1, G, C)`` including the steady-state column 0,
@@ -131,11 +133,15 @@ def simulate_trajectory(p: SergioParams, ss: Array, key: Array, cfg: SergioConfi
 
         x' = x + (p - lambda*x) dt
                + noise_s * sqrt(dt) * (sqrt(p) * eps_p + sqrt(lambda*x) * eps_d)
+
+    ``noise_s`` overrides ``cfg.noise_s`` when given; pass a traced scalar to vary the
+    SDE noise per simulation (``vmap``) without recompiling the static ``cfg``.
     """
     decay = p.decay[:, None]
     dt = cfg.dt
     sqrt_dt = jnp.sqrt(dt)
     ko = p.ko_mask[:, None]
+    noise_s = cfg.noise_s if noise_s is None else noise_s
 
     def step(x, key_t):
         kp, kd = random.split(key_t)
@@ -143,7 +149,7 @@ def simulate_trajectory(p: SergioParams, ss: Array, key: Array, cfg: SergioConfi
         d = decay * x
         eps_p = random.normal(kp, x.shape)
         eps_d = random.normal(kd, x.shape)
-        noise = (jnp.sqrt(prod) * eps_p + jnp.sqrt(d) * eps_d) * cfg.noise_s * sqrt_dt
+        noise = (jnp.sqrt(prod) * eps_p + jnp.sqrt(d) * eps_d) * noise_s * sqrt_dt
         x_new = x + (prod - d) * dt + noise
         x_new = jnp.maximum(x_new, 0.0)
         x_new = x_new * (1.0 - ko)  # knocked-out genes stay silent
@@ -172,13 +178,14 @@ def sample_expression(traj: Array, key: Array, cfg: SergioConfig) -> Array:
     return expr.reshape(c * cfg.num_cells, g)
 
 
-def simulate(p: SergioParams, key: Array, cfg: SergioConfig) -> Array:
+def simulate(p: SergioParams, key: Array, cfg: SergioConfig, noise_s: Array | float | None = None) -> Array:
     """End-to-end clean (noise-free of technical effects) simulation.
 
     Runs steady-state init, SDE integration and cell sampling, returning the
-    expression matrix of shape ``(C * num_cells, G)``.
+    expression matrix of shape ``(C * num_cells, G)``. ``noise_s`` overrides
+    ``cfg.noise_s`` when given (a traced scalar, e.g. sampled per network).
     """
     k_sim, k_sample = random.split(key)
     p_init, ss = init_steady_state(p, cfg)
-    traj = simulate_trajectory(p_init, ss, k_sim, cfg)
+    traj = simulate_trajectory(p_init, ss, k_sim, cfg, noise_s)
     return sample_expression(traj, k_sample, cfg)
