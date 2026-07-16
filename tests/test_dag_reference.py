@@ -21,7 +21,11 @@ def _random_graph(seed: int, num_genes: int, num_edges: int, *, ties: bool, self
     tar = rng.integers(0, num_genes, size=num_edges)
     if not self_loops:
         tar = np.where(tar == reg, (tar + 1) % num_genes, tar)
-    weight = rng.integers(1, 5, size=num_edges).astype(np.float32) if ties else rng.uniform(0.1, 5.0, num_edges).astype(np.float32)
+    weight = (
+        rng.integers(1, 5, size=num_edges).astype(np.float32)
+        if ties
+        else rng.uniform(0.1, 5.0, num_edges).astype(np.float32)
+    )
     active = rng.random(num_edges) < 0.85
     return reg.astype(np.int32), tar.astype(np.int32), weight, active
 
@@ -58,7 +62,9 @@ def test_disjoint_cycles_drop_the_weakest_edge():
     keep = dag_edge_mask_reference(reg, tar, weight, active, 7)
 
     assert keep.tolist() == [True, False, True, True, False, True]
-    assert np.array_equal(np.asarray(_dag_jit(jnp.asarray(reg), jnp.asarray(tar), jnp.asarray(weight), jnp.asarray(active), 7)), keep)
+    assert np.array_equal(
+        np.asarray(_dag_jit(jnp.asarray(reg), jnp.asarray(tar), jnp.asarray(weight), jnp.asarray(active), 7)), keep
+    )
 
 
 @pytest.mark.parametrize("seed", range(12))
@@ -89,10 +95,20 @@ def test_matches_networkx_on_edge_disjoint_cycles(seed):
 
 def test_jit_vmap_batch_is_acyclic():
     batch, num_genes, num_edges = 8, 12, 30
-    reg, tar, weight, active = zip(*(_random_graph(s, num_genes, num_edges, ties=False, self_loops=False) for s in range(batch)))
+    reg, tar, weight, active = zip(
+        *(_random_graph(s, num_genes, num_edges, ties=False, self_loops=False) for s in range(batch))
+    )
     fn = jax.jit(jax.vmap(dag_edge_mask, in_axes=(0, 0, 0, 0, None)), static_argnums=(4,))
 
-    keep = np.asarray(fn(jnp.asarray(np.stack(reg)), jnp.asarray(np.stack(tar)), jnp.asarray(np.stack(weight)), jnp.asarray(np.stack(active)), num_genes))
+    keep = np.asarray(
+        fn(
+            jnp.asarray(np.stack(reg)),
+            jnp.asarray(np.stack(tar)),
+            jnp.asarray(np.stack(weight)),
+            jnp.asarray(np.stack(active)),
+            num_genes,
+        )
+    )
 
     for b in range(batch):
         assert _is_acyclic(reg[b], tar[b], keep[b], num_genes)
