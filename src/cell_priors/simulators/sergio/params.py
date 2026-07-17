@@ -17,6 +17,8 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
+from .dag import dag_edge_mask
+
 
 @jax.tree_util.register_dataclass
 @dataclass(frozen=True)
@@ -133,15 +135,17 @@ def build_sergio_params(
     repression_prob_range: tuple[float, float] = (0.0, 0.5),
     mr_low_range: tuple[float, float] = (0.5, 2.0),
     mr_high_range: tuple[float, float] = (3.0, 5.0),
+    dag: bool = False,
     dtype=jnp.float32,
 ) -> SergioParams:
     """Sample SERGIO kinetics for a :class:`GRN` as a pure JAX function.
 
-    Keeps the graph exactly as drawn (no cycle removal) and gives every gene its own
-    basal production rate, so any structure -- cyclic, source-free -- is driven. A unique
-    edge is active where the GRN's ``weight`` is positive (one row per ``reg -> tar`` pair,
-    each with its own sampled interaction); duplicate / padding / self-loop slots are
-    masked out. (SERGIO has no multiplicity notion, so the count itself is unused here.)
+    An edge is active where the GRN's ``weight`` is positive (one row per ``reg -> tar``
+    pair, each with its own sampled interaction); duplicate / padding / self-loop slots are
+    masked out. With ``dag=False`` the graph is kept exactly as drawn (cycle-tolerant; pair
+    with ``SergioConfig(require_mrs=False)`` so every gene has a basal rate). With ``dag=True``
+    cycles are removed via :func:`~cell_priors.simulators.sergio.dag.dag_edge_mask` so master
+    regulators emerge and standard SERGIO's topological steady state applies.
 
     Because it only uses ``jax.random`` and fixed shapes, this composes with the
     sampler and simulator inside a single ``jit``/``vmap``-ed graph.
@@ -165,13 +169,17 @@ def build_sergio_params(
     low = _u(k_lo, (g, c), mr_low_range)
     prod_rates = jnp.where(jax.random.uniform(k_mix, (g, c)) < 0.5, high, low)
 
+    active = grn.weight > 0
+    if dag:
+        active = dag_edge_mask(grn.reg_idx, grn.tar_idx, k_abs, active, g)
+
     p = SergioParams(
         reg_idx=grn.reg_idx.astype(jnp.int32),
         tar_idx=grn.tar_idx.astype(jnp.int32),
         k=(k_abs * sign).astype(dtype),
         hill_n=hill_n.astype(dtype),
         h=jnp.zeros(e, dtype=dtype),
-        edge_mask=(grn.weight > 0).astype(dtype),
+        edge_mask=active.astype(dtype),
         decay=decay.astype(dtype),
         mr_mask=jnp.zeros(g, dtype=dtype),
         prod_scale=jnp.ones(g, dtype=dtype),

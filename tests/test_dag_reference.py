@@ -9,8 +9,10 @@ import numpy as np
 import pytest
 from reference.dag_reference import dag_edge_mask_reference
 
+from cell_priors.samplers.grouped_scale_free import edges_to_grn, grouped_scale_free_edges
 from cell_priors.simulators.sergio.adapter import _acyclic_edge_mask
 from cell_priors.simulators.sergio.dag import dag_edge_mask
+from cell_priors.simulators.sergio.params import build_sergio_params
 
 _dag_jit = jax.jit(dag_edge_mask, static_argnums=(4,))
 
@@ -91,6 +93,28 @@ def test_matches_networkx_on_edge_disjoint_cycles(seed):
     host = _acyclic_edge_mask(reg, tar, weight, num_genes)
 
     assert np.array_equal(canonical, host)
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_build_sergio_params_dag_is_acyclic_with_master_regulators(seed):
+    num_genes, max_edges = 20, 80
+    sources, targets, valid, groups = grouped_scale_free_edges(
+        jax.random.key(seed), num_genes, delta_in=5.0, kappa=4.0, max_edges=max_edges
+    )
+    grn = edges_to_grn(sources, targets, valid, groups)
+
+    cyclic = build_sergio_params(grn, jax.random.key(seed + 100), dag=False)
+    acyclic = build_sergio_params(grn, jax.random.key(seed + 100), dag=True)
+
+    reg, tar = np.asarray(grn.reg_idx), np.asarray(grn.tar_idx)
+    assert not _is_acyclic(reg, tar, np.asarray(cyclic.edge_mask) > 0, num_genes), (
+        "seed cycle should survive dag=False"
+    )
+    assert _is_acyclic(reg, tar, np.asarray(acyclic.edge_mask) > 0, num_genes)
+
+    kept_in_degree = np.zeros(num_genes)
+    np.add.at(kept_in_degree, tar, np.asarray(acyclic.edge_mask))
+    assert np.array_equal(np.asarray(acyclic.mr_mask) > 0, kept_in_degree == 0)
 
 
 def test_jit_vmap_batch_is_acyclic():
