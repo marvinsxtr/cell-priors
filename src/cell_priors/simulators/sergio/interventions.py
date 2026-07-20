@@ -6,8 +6,9 @@ jitted simulation code.
 
 **Hard knockout** removes the gene and its outgoing regulatory edges (matching
 SERGIO's ``ko_perturbation``): the gene is silenced and stops regulating its
-targets. Targets that lose their only regulator automatically become master
-regulators (see :func:`recompute_mr_mask`).
+targets. The master-regulator set is fixed when the network is built and is *not*
+re-derived after a knockout, so a target that loses its only regulator collapses
+(it does not acquire basal production) -- matching ``sergio_rs``.
 
 **Soft knockdown** models CRISPRi: the gene's transcription is scaled down by a
 factor ``strength`` in ``[0, 1]`` while the causal graph stays fully intact, so
@@ -22,7 +23,7 @@ import dataclasses
 import jax.numpy as jnp
 from jax import Array
 
-from .params import SergioParams, recompute_mr_mask
+from .params import SergioParams
 
 
 def _gene_onehot(gene_indices: Array, num_genes: int, dtype) -> Array:
@@ -37,8 +38,7 @@ def knockout(p: SergioParams, gene_indices: Array) -> SergioParams:
     edge_mask = p.edge_mask * (1.0 - target[p.reg_idx])
     prod_scale = p.prod_scale * (1.0 - target)
     ko_mask = jnp.maximum(p.ko_mask, target)
-    perturbed = dataclasses.replace(p, edge_mask=edge_mask, prod_scale=prod_scale, ko_mask=ko_mask)
-    return recompute_mr_mask(perturbed)
+    return dataclasses.replace(p, edge_mask=edge_mask, prod_scale=prod_scale, ko_mask=ko_mask)
 
 
 def knockdown(p: SergioParams, gene_indices: Array, strength: float = 1.0) -> SergioParams:
