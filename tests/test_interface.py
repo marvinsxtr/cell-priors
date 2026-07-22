@@ -9,13 +9,37 @@ import pytest
 
 from cell_priors.base import ComposedPrior, InterventionKind
 from cell_priors.samplers import GroupedScaleFreeSampler
-from cell_priors.simulators.sergio import SergioConfig, SergioSimulator
+from cell_priors.simulators.sergio import SergioConfig, SergioSimulator, core, make_params
+from cell_priors.simulators.sergio.interventions import knockout
 
 
 @pytest.fixture
 def prior():
     cfg = SergioConfig(num_cells=30, num_cell_types=2, safety_iter=60, scale_iter=3, dt=0.01, noise_s=1.0)
     return ComposedPrior(GroupedScaleFreeSampler(r=3.0, num_groups=1), SergioSimulator(cfg))
+
+
+def test_knockout_promotes_orphaned_target():
+    # Chain 0 -> 1 -> 2, gene 0 the only master regulator. sergio_rs's ko_perturbation calls set_mrs on
+    # the perturbed graph, so knocking out gene 1 promotes the orphaned gene 2 to a master regulator
+    # (basal production) rather than letting it collapse. recompute_mr_mask reproduces that.
+    p = make_params(
+        reg_idx=np.array([0, 1]),
+        tar_idx=np.array([1, 2]),
+        k=np.array([3.0, 3.0]),
+        hill_n=np.array([2.0, 2.0]),
+        decay=np.array([1.0, 1.0, 1.0]),
+        prod_rates=np.array([[4.0], [4.0], [4.0]]),
+    )
+    cfg = SergioConfig(num_cells=200, require_mrs=True, safety_iter=120, scale_iter=8, dt=0.01)
+    ko = knockout(p, jnp.array([1]))
+    assert float(ko.mr_mask[2]) == 1.0, "orphaned target must be promoted to a master regulator"
+
+    key = jax.random.PRNGKey(0)
+    ctrl_g2 = float(core.simulate(p, key, cfg)[:, 2].mean())
+    ko_g2 = float(core.simulate(ko, key, cfg)[:, 2].mean())
+    assert ctrl_g2 > 0.5, "gene 2 should be expressed in the control"
+    assert ko_g2 > 0.5 * ctrl_g2, "promoted gene 2 should stay at ~basal, not collapse toward zero"
 
 
 def test_observational_shape(prior):
