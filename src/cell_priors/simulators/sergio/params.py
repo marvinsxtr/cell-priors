@@ -83,8 +83,9 @@ def recompute_mr_mask(p: SergioParams) -> SergioParams:
     """Recompute which genes are master regulators from the active edges.
 
     A gene with no active incoming edges is a master regulator and is driven by
-    ``prod_rates``. This mirrors SERGIO's ``set_mrs`` and is applied once when the
-    network is built (not after a knockout).
+    ``prod_rates``. This mirrors SERGIO's ``set_mrs`` and, crucially, makes genes
+    that become orphaned by a knockout (their sole regulator removed) turn into
+    master regulators automatically.
     """
     g = p.num_genes
     in_active = jax.ops.segment_sum(p.edge_mask, p.tar_idx, num_segments=g)
